@@ -15,11 +15,25 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="SpaceInvaders.cpp">
+    <ClCompile Include="SpaceInvaders.c">
       <Filter>Pliki źródłowe</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="player.png">
+      <Filter>Pliki zasobów</Filter>
+    </Image>
+    <Image Include="..\..\Users\Start\Desktop\bullet.png">
+      <Filter>Pliki zasobów</Filter>
+    </Image>
+    <Image Include="..\..\Users\Start\Desktop\enemy.png">
+      <Filter>Pliki zasobów</Filter>
+    </Image>
+    <Image Include="bullet_me.png">
+      <Filter>Pliki zasobów</Filter>
+    </Image>
   </ItemGroup>
 </Project>

@@ -73,6 +73,11 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <Allegro_AddonTTF>Yes</Allegro_AddonTTF>
     <Allegro_AddonFont>Yes</Allegro_AddonFont>
+    <Allegro_AddonImage>Yes</Allegro_AddonImage>
+    <Allegro_LibraryType>DynamicDebug</Allegro_LibraryType>
+    <Allegro_AddonColor>
+    </Allegro_AddonColor>
+    <Allegro_AddonPrimitives>Yes</Allegro_AddonPrimitives>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -131,10 +136,16 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="SpaceInvaders.cpp" />
+    <ClCompile Include="SpaceInvaders.c" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="..\..\Users\Start\Desktop\bullet.png" />
+    <Image Include="..\..\Users\Start\Desktop\enemy.png" />
+    <Image Include="bullet_me.png" />
+    <Image Include="player.png" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
