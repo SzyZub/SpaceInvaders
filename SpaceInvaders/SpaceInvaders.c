@@ -5,6 +5,7 @@
 #include <allegro5/allegro_image.h>
 #include <allegro5/allegro_primitives.h>
 
+
 enum obj_type {
     t_player = 0,
     t_enemy,
@@ -57,14 +58,17 @@ int main() {
 	ALLEGRO_EVENT event;
 	al_start_timer(timer);
 
-    obj enemylist[30] = {NULL};
+
+    int enemycount = 40;
+    int enemyperrow = 8;
+    obj enemylist[40] = {NULL};
     int tempy = -50;
-    for (int i = 0; i < 30; i++) {
-        if (i % 6 == 0) {
+    for (int i = 0; i < enemycount; i++) {
+        if (i % enemyperrow == 0) {
             tempy += 50;
         }
         obj* enemy = &enemylist[i];
-        enemy->x = 300 + i % 6 * 100;
+        enemy->x = 300 + i % enemyperrow * 50;
         enemy->y = 100 + tempy;
         enemy->type = 2;
     }
@@ -76,12 +80,12 @@ int main() {
         switch (event.type) {
             case ALLEGRO_EVENT_TIMER:
                 redraw = true;
-                for (int i = 0; i < 30; i++) {
+                for (int i = 0; i < enemycount; i++) {
                     enemylist[i].x += 1 * movement;
                 }
-                if (enemylist[29].x > 900 || enemylist[0].x < 100) {
+                if (enemylist[enemycount - 1].x > 900 || enemylist[0].x < 100) {
                     movement *= -1;
-                    for (int i = 0; i < 30; i++) {
+                    for (int i = 0; i < enemycount; i++) {
                         enemylist[i].y += 50;
                     }
                 }
@@ -99,7 +103,7 @@ int main() {
 		if (redraw && al_is_event_queue_empty(queue))
 		{
             al_clear_to_color(al_map_rgb(0, 0, 0));
-            for (int i = 0; i < 30; i++) {
+            for (int i = 0; i < enemycount; i++) {
                 al_draw_bitmap(enemies, enemylist[i].x, enemylist[i].y, 0);
             }
 			al_flip_display();
