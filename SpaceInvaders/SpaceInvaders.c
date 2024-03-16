@@ -15,16 +15,6 @@
 #define KEY_USED   1
 #define KEY_RELEASED 2
 
-void init(bool test, const char* description);
-void init_all();
-void destroyall();
-void disp_pre_draw();
-void disp_post_draw(long *frames);
-void keyboard_update(ALLEGRO_EVENT* event);
-bool collide(int ax1, int ay1, int ax2, int ay2, int bx1, int by1, int bx2, int by2);
-void placeenemies(int enemycount, int enemyperrow, struct enemystruct list[]);
-void initplayer(struct playerstruct* player);
-
 enum status {
     dead = 0,
     alive
@@ -36,9 +26,21 @@ typedef struct playerstruct {
 
 typedef struct enemystruct {
     int x, y;
-    unsigned int id;
-    enum status status; 
+    enum status status;
+    struct enemystruct* next;
 } enemystruct;
+
+void init(bool test, const char* description);
+void init_all();
+void destroyall();
+void disp_pre_draw();
+void disp_post_draw(long *frames);
+void keyboard_update(ALLEGRO_EVENT* event);
+bool collide(int ax1, int ay1, int ax2, int ay2, int bx1, int by1, int bx2, int by2);
+void initplayer(struct playerstruct *player);
+void initenemylist(struct enemystruct *head, int count);
+void placeenemies(int enemycount, int enemyperrow, struct enemystruct* head);
+void drawenemies(struct enemystruct* head);
 
 ALLEGRO_DISPLAY* display;
 ALLEGRO_BITMAP* buffer;
@@ -61,11 +63,11 @@ int main() {
     long frames = 0;
     int enemycount = 72;
     int enemyperrow = 12;
-    enemystruct *enemylist = calloc(enemycount, sizeof(enemystruct));
+    enemystruct *headenemylist = (enemystruct*) calloc(enemycount, sizeof(enemystruct));
     playerstruct player;
-    placeenemies(enemycount, enemyperrow, enemylist);
+    initenemylist(headenemylist, enemycount);
+    placeenemies(enemycount, enemyperrow, headenemylist);
     initplayer(&player);
-
     int enemymovement = 1;
     al_start_timer(timer);
 
@@ -92,7 +94,6 @@ int main() {
                     quitprog = true;
                 for (int i = 0; i < ALLEGRO_KEY_MAX; i++)
                     key[i] &= KEY_USED;
-                redraw = true;
                 break;
             case ALLEGRO_EVENT_KEY_DOWN:
                 key[event.keyboard.keycode] = KEY_USED | KEY_RELEASED;
@@ -108,21 +109,20 @@ int main() {
         if (quitprog) {
             break;
         }
-        
+
+        keyboard_update(&event);
+
 		if (redraw && al_is_event_queue_empty(queue))
 		{
             disp_pre_draw();
             al_clear_to_color(al_map_rgb(0, 0, 0));
-            for (int i = 0; i < enemycount; i++) {
-                al_draw_bitmap(enemyimg, enemylist[i].x, enemylist[i].y, 0);
-            }
             al_draw_bitmap(playerimg, player.x, player.y, 0);
+            drawenemies(headenemylist);
             disp_post_draw(&frames);
-			redraw = false;
+            redraw = false;
 		}
         
 	}
-    free(enemylist);
     destroyall();
 }
 
@@ -193,19 +193,18 @@ void disp_post_draw(long* frames)
 
 void keyboard_update(ALLEGRO_EVENT* event)
 {
-    switch (event->type)
-    {
-    case ALLEGRO_EVENT_TIMER:
-        for (int i = 0; i < ALLEGRO_KEY_MAX; i++)
-            key[i] &= KEY_USED;
-        break;
+    switch (event->type){
+        case ALLEGRO_EVENT_TIMER:
+            for (int i = 0; i < ALLEGRO_KEY_MAX; i++)
+                key[i] &= KEY_USED;
+            break;
 
-    case ALLEGRO_EVENT_KEY_DOWN:
-        key[event->keyboard.keycode] = KEY_USED | KEY_RELEASED;
-        break;
-    case ALLEGRO_EVENT_KEY_UP:
-        key[event->keyboard.keycode] &= KEY_RELEASED;
-        break;
+        case ALLEGRO_EVENT_KEY_DOWN:
+            key[event->keyboard.keycode] = KEY_USED | KEY_RELEASED;
+            break;
+        case ALLEGRO_EVENT_KEY_UP:
+            key[event->keyboard.keycode] &= KEY_RELEASED;
+            break;
     }
 }
 
@@ -219,24 +218,47 @@ bool collide(int ax1, int ay1, int ax2, int ay2, int bx1, int by1, int bx2, int 
     return true;
 }
 
-void placeenemies(int enemycount, int enemyperrow, struct enemystruct list[]) {
-    int tempy = -10;
-    for (int i = 0; i < enemycount; i++) {
-        if (i % enemyperrow == 0) {
-            tempy += 25;
-        }
-        enemystruct enemy;
-        enemy.x = 50 + i % enemyperrow * 30;
-        enemy.y = tempy;
-        enemy.status = 1;
-        list[i] = enemy;
-    }
-}
-
-void initplayer(struct playerstruct *player) {
+void initplayer(playerstruct *player) {
     player->x = 320;
     player->y = 400;
 }
 
-//TODO change to sprite based system
-//include "waves of enemies"
+void initenemylist(enemystruct *head, int count) {
+    for (int i = 0; i < count; i++) {
+        head->next = (enemystruct*)malloc(sizeof(enemystruct));
+        if (head->next == NULL) {
+            fprintf(stderr, "Was assigned null as a pointer");
+            exit(-1);
+        }
+        head = head->next;
+    }
+    if (head == NULL) {
+        fprintf(stderr, "Was assigned null as a pointer");
+        exit(-1);
+    }
+    head->next = NULL;
+}
+
+
+void placeenemies(int enemycount, int enemyperrow, enemystruct* head) {
+    int tempy = -10;
+    int i = 0;
+    while(head->next != NULL) {
+        if (i % enemyperrow == 0) {
+            tempy += 25;
+        }
+        head->x = 50 + i % enemyperrow * 30;
+        head->y = tempy;
+        head->status = 1;
+        head = head->next;
+        i++;
+    }
+}
+
+void drawenemies(enemystruct* head) {
+    
+    while(head->next != NULL) {
+        al_draw_bitmap(enemyimg, head->x, head->y, 0);
+        head = head->next;
+    }
+}
