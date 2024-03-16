@@ -11,7 +11,6 @@
 #define DISP_TO_BUFFER_SCALE 2
 #define DISP_W (BUFFER_W * DISP_TO_BUFFER_SCALE)
 #define DISP_H (BUFFER_H * DISP_TO_BUFFER_SCALE)
-
 #define KEY_USED   1
 #define KEY_RELEASED 2
 
@@ -58,7 +57,7 @@ int main() {
     ALLEGRO_EVENT event;
     memset(key, 0, sizeof(key));
     bool quitprog = false;
-	bool redraw = true;
+    bool redraw = true;
     long score = 0;
     long frames = 0;
     int enemycount = 72;
@@ -66,35 +65,34 @@ int main() {
     enemystruct *headenemylist = (enemystruct*) calloc(enemycount, sizeof(enemystruct));
     playerstruct player;
     initenemylist(headenemylist, enemycount);
-    placeenemies(enemycount, enemyperrow, headenemylist);
+	placeenemies(enemycount, enemyperrow, headenemylist);
     initplayer(&player);
     int enemymovement = 1;
     al_start_timer(timer);
-
-	while (true) {
+    while (true) {
 		al_wait_for_event(queue, &event);
         switch (event.type) {
             case ALLEGRO_EVENT_TIMER:
                 redraw = true;
                 /*for (int i = 0; i < enemycount; i++) {
-                    enemylist[i].x += 1 * enemymovement;
+                   	enemylist[i].x += 1 * enemymovement;
                 }
                 if (enemylist[enemycount - 1].x > 900 || enemylist[0].x < 10) {
-                    enemymovement *= -1;
-                    for (int i = 0; i < enemycount; i++) {
-                        enemylist[i].y += 50;
-                    }
+                    	enemymovement *= -1;
+                    	for (int i = 0; i < enemycount; i++) {
+                        	enemylist[i].y += 50;
+                    	}
                 }
                 */
                 if (key[ALLEGRO_KEY_LEFT])
-                    player.x--;
+                    	player.x--;
                 if (key[ALLEGRO_KEY_RIGHT])
-                    player.x++;
+        		player.x++;
                 if (key[ALLEGRO_KEY_ESCAPE])
-                    quitprog = true;
+                    	quitprog = true;
                 for (int i = 0; i < ALLEGRO_KEY_MAX; i++)
-                    key[i] &= KEY_USED;
-                break;
+                    	key[i] &= KEY_USED;
+                	break;
             case ALLEGRO_EVENT_KEY_DOWN:
                 key[event.keyboard.keycode] = KEY_USED | KEY_RELEASED;
                 break;
@@ -105,13 +103,10 @@ int main() {
                 quitprog = true;
                 break;
         }
-		
         if (quitprog) {
             break;
         }
-
         keyboard_update(&event);
-
 		if (redraw && al_is_event_queue_empty(queue))
 		{
             disp_pre_draw();
@@ -121,11 +116,9 @@ int main() {
             disp_post_draw(&frames);
             redraw = false;
 		}
-        
 	}
     destroyall();
 }
-
 
 void init(bool test, const char* description)
 {
@@ -186,7 +179,6 @@ void disp_post_draw(long* frames)
 {
     al_set_target_backbuffer(display);
     al_draw_scaled_bitmap(buffer, 0, 0, BUFFER_W, BUFFER_H, 0, 0, DISP_W, DISP_H, 0);
-
     al_flip_display();
     (*frames)++;
 }
@@ -198,7 +190,6 @@ void keyboard_update(ALLEGRO_EVENT* event)
             for (int i = 0; i < ALLEGRO_KEY_MAX; i++)
                 key[i] &= KEY_USED;
             break;
-
         case ALLEGRO_EVENT_KEY_DOWN:
             key[event->keyboard.keycode] = KEY_USED | KEY_RELEASED;
             break;
@@ -214,7 +205,6 @@ bool collide(int ax1, int ay1, int ax2, int ay2, int bx1, int by1, int bx2, int 
     if (ax2 < bx1) return false;
     if (ay1 > by2) return false;
     if (ay2 < by1) return false;
-
     return true;
 }
 
@@ -256,7 +246,6 @@ void placeenemies(int enemycount, int enemyperrow, enemystruct* head) {
 }
 
 void drawenemies(enemystruct* head) {
-    
     while(head->next != NULL) {
         al_draw_bitmap(enemyimg, head->x, head->y, 0);
         head = head->next;
