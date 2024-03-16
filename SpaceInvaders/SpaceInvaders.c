@@ -85,13 +85,13 @@ int main() {
                 }
                 */
                 if (key[ALLEGRO_KEY_LEFT])
-                    	player.x--;
+                    player.x--;
                 if (key[ALLEGRO_KEY_RIGHT])
-        		player.x++;
+        		    player.x++;
                 if (key[ALLEGRO_KEY_ESCAPE])
-                    	quitprog = true;
+                    quitprog = true;
                 for (int i = 0; i < ALLEGRO_KEY_MAX; i++)
-                    	key[i] &= KEY_USED;
+                    key[i] &= KEY_USED;
                 	break;
             case ALLEGRO_EVENT_KEY_DOWN:
                 key[event.keyboard.keycode] = KEY_USED | KEY_RELEASED;
