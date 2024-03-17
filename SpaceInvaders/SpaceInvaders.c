@@ -5,6 +5,8 @@
 #include <allegro5/allegro_font.h>
 #include <allegro5/allegro_ttf.h>
 #include <allegro5/allegro_image.h>
+//testing purposes
+#include <allegro5/allegro_primitives.h>
 
 #define BUFFER_W 640
 #define BUFFER_H 480
@@ -29,17 +31,26 @@ typedef struct enemystruct {
     struct enemystruct* next;
 } enemystruct;
 
+typedef struct boundingbox {
+    int x1, x2, y1, y2;
+} boundingbox;
+
 void init(bool test, const char* description);
 void init_all();
 void destroyall();
-void disp_pre_draw();
 void disp_post_draw(long *frames);
-void keyboard_update(ALLEGRO_EVENT* event);
+void keyboard_update(ALLEGRO_EVENT* event, unsigned char key[]);
 bool collide(int ax1, int ay1, int ax2, int ay2, int bx1, int by1, int bx2, int by2);
-void initplayer(struct playerstruct *player);
-void initenemylist(struct enemystruct *head, int count);
-void placeenemies(int enemycount, int enemyperrow, struct enemystruct* head);
-void drawenemies(struct enemystruct* head);
+void initplayer(playerstruct *player);
+void initbox(int x1, int x2, int y1, int y2, boundingbox* box);
+void initenemylist(enemystruct *head, int count);
+void placeenemies(int enemycount, int enemyperrow, enemystruct* head);
+void drawenemies(enemystruct* head);
+void drawbackground();
+void drawplayer(playerstruct* playerstruct);
+void enemymovement(boundingbox* box, enemystruct* head, int* enemymovement);
+void playermovement(playerstruct* player, bool* quitprog, unsigned char key[]);
+
 
 ALLEGRO_DISPLAY* display;
 ALLEGRO_BITMAP* buffer;
@@ -50,11 +61,11 @@ ALLEGRO_BITMAP* playerimg;
 ALLEGRO_BITMAP* enemybullet;
 ALLEGRO_BITMAP* playerbullet;
 ALLEGRO_BITMAP* enemyimg;
-unsigned char key[ALLEGRO_KEY_MAX];
 
 int main() {
     init_all();
     ALLEGRO_EVENT event;
+    unsigned char key[ALLEGRO_KEY_MAX];
     memset(key, 0, sizeof(key));
     bool quitprog = false;
     bool redraw = true;
@@ -63,36 +74,22 @@ int main() {
     int enemycount = 72;
     int enemyperrow = 12;
     enemystruct *headenemylist = (enemystruct*) calloc(enemycount, sizeof(enemystruct));
+    boundingbox enemycol;
     playerstruct player;
     initenemylist(headenemylist, enemycount);
 	placeenemies(enemycount, enemyperrow, headenemylist);
+    initbox(50, 36 + enemyperrow * 30, 15, 4 + enemycount / enemyperrow * 25, &enemycol);
     initplayer(&player);
-    int enemymovement = 1;
+    int enemyspeed = 1;
     al_start_timer(timer);
     while (true) {
 		al_wait_for_event(queue, &event);
         switch (event.type) {
             case ALLEGRO_EVENT_TIMER:
                 redraw = true;
-                /*for (int i = 0; i < enemycount; i++) {
-                   	enemylist[i].x += 1 * enemymovement;
-                }
-                if (enemylist[enemycount - 1].x > 900 || enemylist[0].x < 10) {
-                    	enemymovement *= -1;
-                    	for (int i = 0; i < enemycount; i++) {
-                        	enemylist[i].y += 50;
-                    	}
-                }
-                */
-                if (key[ALLEGRO_KEY_LEFT])
-                    player.x--;
-                if (key[ALLEGRO_KEY_RIGHT])
-        		    player.x++;
-                if (key[ALLEGRO_KEY_ESCAPE])
-                    quitprog = true;
-                for (int i = 0; i < ALLEGRO_KEY_MAX; i++)
-                    key[i] &= KEY_USED;
-                	break;
+                enemymovement(&enemycol, headenemylist, &enemyspeed);
+                playermovement(&player, &quitprog, key);
+                break;
             case ALLEGRO_EVENT_KEY_DOWN:
                 key[event.keyboard.keycode] = KEY_USED | KEY_RELEASED;
                 break;
@@ -106,12 +103,15 @@ int main() {
         if (quitprog) {
             break;
         }
-        keyboard_update(&event);
+        keyboard_update(&event, key);
 		if (redraw && al_is_event_queue_empty(queue))
 		{
-            disp_pre_draw();
-            al_clear_to_color(al_map_rgb(0, 0, 0));
-            al_draw_bitmap(playerimg, player.x, player.y, 0);
+            al_set_target_bitmap(buffer);
+            drawbackground();
+            //testing purposes
+            al_draw_rectangle(enemycol.x1, enemycol.y1, enemycol.x2, enemycol.y2, al_map_rgb(120, 120, 120), 10);
+            //
+            drawplayer(&player);
             drawenemies(headenemylist);
             disp_post_draw(&frames);
             redraw = false;
@@ -123,7 +123,7 @@ int main() {
 void init(bool test, const char* description)
 {
     if (test) return;
-    printf("couldn't initialize %s\n", description);
+    fprintf(stderr, "couldn't initialize %s\n", description);
     exit(1);
 }
 
@@ -134,13 +134,16 @@ void init_all()
     init(al_init_font_addon(), "font addon");
     init(al_init_ttf_addon(), "ttf addon");
     init(al_init_image_addon(), "image addon");
+    //testing purposes
+    init(al_init_primitives_addon(), "primitives addon");
+    //
     display = al_create_display(DISP_W, DISP_H);
     init(display, "display");
     buffer = al_create_bitmap(BUFFER_W, BUFFER_H);
     init(buffer, "bitmap buffer");
     font = al_load_ttf_font("font.ttf", 24, 0);
     init(font, "font.ttf");
-    timer = al_create_timer(1.0 / 60.0);
+    timer = al_create_timer(1.0 / 30.0);
     init(timer, "timer");
     queue = al_create_event_queue();
     init(queue, "queue");
@@ -155,7 +158,6 @@ void init_all()
     al_register_event_source(queue, al_get_keyboard_event_source());
     al_register_event_source(queue, al_get_display_event_source(display));
     al_register_event_source(queue, al_get_timer_event_source(timer));
-    memset(key, 0, sizeof(key));
 }
 
 void destroyall() {
@@ -170,11 +172,6 @@ void destroyall() {
     al_destroy_bitmap(buffer);
 }
 
-void disp_pre_draw()
-{
-    al_set_target_bitmap(buffer);
-}
-
 void disp_post_draw(long* frames)
 {
     al_set_target_backbuffer(display);
@@ -183,7 +180,7 @@ void disp_post_draw(long* frames)
     (*frames)++;
 }
 
-void keyboard_update(ALLEGRO_EVENT* event)
+void keyboard_update(ALLEGRO_EVENT* event, unsigned char key[])
 {
     switch (event->type){
         case ALLEGRO_EVENT_TIMER:
@@ -211,6 +208,13 @@ bool collide(int ax1, int ay1, int ax2, int ay2, int bx1, int by1, int bx2, int 
 void initplayer(playerstruct *player) {
     player->x = 320;
     player->y = 400;
+}
+
+void initbox(int x1, int x2, int y1, int y2, boundingbox* box) {
+    box->x1 = x1;
+    box->x2 = x2;
+    box->y1 = y1;
+    box->y2 = y2;
 }
 
 void initenemylist(enemystruct *head, int count) {
@@ -250,4 +254,42 @@ void drawenemies(enemystruct* head) {
         al_draw_bitmap(enemyimg, head->x, head->y, 0);
         head = head->next;
     }
+}
+
+void drawbackground() {
+    al_clear_to_color(al_map_rgb(0, 0, 0));
+}
+
+void drawplayer(playerstruct* playerstruct) {
+    al_draw_bitmap(playerimg, playerstruct->x, playerstruct->y, 0);
+}
+
+void enemymovement(boundingbox* box, enemystruct* head, int* enemyspeed) {
+    enemystruct* temp = head;
+    while (head->next != NULL) {
+        head->x += *enemyspeed;
+        head = head->next;
+    }
+    box->x1 += *enemyspeed;
+    box->x2 += *enemyspeed;
+    if (box->x1 < 40 || box->x2 > 600) {
+        while (temp->next != NULL) {
+            temp->y += 30;
+            temp = temp->next;
+        }
+        box->y1 += 30;
+        box->y2 += 30;
+        *enemyspeed *= -1;
+    }
+}
+
+void playermovement(playerstruct *player, bool* quitprog, unsigned char key[]) {
+    if (key[ALLEGRO_KEY_LEFT])
+        player->x--;
+    if (key[ALLEGRO_KEY_RIGHT])
+        player->x++;
+    if (key[ALLEGRO_KEY_ESCAPE])
+        *quitprog = true;
+    for (int i = 0; i < ALLEGRO_KEY_MAX; i++)
+        key[i] &= KEY_USED;
 }
