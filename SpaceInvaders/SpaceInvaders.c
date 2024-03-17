@@ -25,16 +25,17 @@ typedef struct playerstruct {
     int x, y;
 } playerstruct;
 
-typedef struct enemystruct {
+typedef struct liststruct {
     int x, y;
-    enum status status;
-    struct enemystruct* next;
-} enemystruct;
+    struct liststruct* next;
+} liststruct;
 
 typedef struct boundingbox {
     int x1, x2, y1, y2;
 } boundingbox;
 
+void checkptrnull(liststruct* head);
+void freeptrlist(liststruct** head);
 void init(bool test, const char* description);
 void init_all();
 void destroyall();
@@ -43,14 +44,15 @@ void keyboard_update(ALLEGRO_EVENT* event, unsigned char key[]);
 bool collide(int ax1, int ay1, int ax2, int ay2, int bx1, int by1, int bx2, int by2);
 void initplayer(playerstruct *player);
 void initbox(int x1, int x2, int y1, int y2, boundingbox* box);
-void initenemylist(enemystruct *head, int count);
-void placeenemies(int enemycount, int enemyperrow, enemystruct* head);
-void drawenemies(enemystruct* head);
+void initenemylist(liststruct *head, int count);
+void placeenemies(int enemycount, int enemyperrow, liststruct* head);
+void drawenemies(liststruct* head);
+void drawbullets(liststruct* head);
 void drawbackground();
 void drawplayer(playerstruct* playerstruct);
-void enemymovement(boundingbox* box, enemystruct* head, int* enemymovement);
+void enemymovement(boundingbox* box, liststruct* head, int* enemymovement);
 void playermovement(playerstruct* player, bool* quitprog, unsigned char key[]);
-
+void playershoot(liststruct* head, playerstruct player);
 
 ALLEGRO_DISPLAY* display;
 ALLEGRO_BITMAP* buffer;
@@ -73,15 +75,21 @@ int main() {
     long frames = 0;
     int enemycount = 72;
     int enemyperrow = 12;
-    enemystruct *headenemylist = (enemystruct*) calloc(enemycount, sizeof(enemystruct));
+    liststruct *headenemylist = (liststruct*) malloc(sizeof(liststruct)); 
+    checkptrnull(headenemylist);
+    headenemylist->next = NULL;
+    liststruct *playerbulletlist = (liststruct*) malloc(sizeof(liststruct));
+    checkptrnull(playerbulletlist);
+    playerbulletlist->next = NULL;
     boundingbox enemycol;
     playerstruct player;
     initenemylist(headenemylist, enemycount);
 	placeenemies(enemycount, enemyperrow, headenemylist);
     initbox(50, 36 + enemyperrow * 30, 15, 4 + enemycount / enemyperrow * 25, &enemycol);
     initplayer(&player);
-    int enemyspeed = 1;
+    int enemyspeed = 2;
     al_start_timer(timer);
+    playershoot(playerbulletlist, player);
     while (true) {
 		al_wait_for_event(queue, &event);
         switch (event.type) {
@@ -113,11 +121,33 @@ int main() {
             //
             drawplayer(&player);
             drawenemies(headenemylist);
+            drawbullets(playerbulletlist);
             disp_post_draw(&frames);
             redraw = false;
 		}
 	}
     destroyall();
+    freeptrlist(&headenemylist);
+}
+
+void checkptrnull(liststruct* head) {
+    if (head == NULL) {
+        perror("Was assigned null as a pointer");
+        exit(-1);
+    }
+}
+
+void freeptrlist(liststruct** head) {
+    struct liststruct* nextp = *head;
+    struct liststruct* prev = NULL;
+    while (nextp != NULL)
+    {
+        prev = nextp;
+        nextp = nextp->next;
+        free(prev);
+        
+    }
+    *head = NULL;
 }
 
 void init(bool test, const char* description)
@@ -217,24 +247,17 @@ void initbox(int x1, int x2, int y1, int y2, boundingbox* box) {
     box->y2 = y2;
 }
 
-void initenemylist(enemystruct *head, int count) {
+void initenemylist(liststruct* head, int count) {
     for (int i = 0; i < count; i++) {
-        head->next = (enemystruct*)malloc(sizeof(enemystruct));
-        if (head->next == NULL) {
-            fprintf(stderr, "Was assigned null as a pointer");
-            exit(-1);
-        }
+        head->next = (liststruct*) malloc(sizeof(liststruct));
+        checkptrnull(head->next);
         head = head->next;
     }
-    if (head == NULL) {
-        fprintf(stderr, "Was assigned null as a pointer");
-        exit(-1);
-    }
+    checkptrnull(head);
     head->next = NULL;
 }
 
-
-void placeenemies(int enemycount, int enemyperrow, enemystruct* head) {
+void placeenemies(int enemycount, int enemyperrow, liststruct* head) {
     int tempy = -10;
     int i = 0;
     while(head->next != NULL) {
@@ -243,15 +266,21 @@ void placeenemies(int enemycount, int enemyperrow, enemystruct* head) {
         }
         head->x = 50 + i % enemyperrow * 30;
         head->y = tempy;
-        head->status = 1;
         head = head->next;
         i++;
     }
 }
 
-void drawenemies(enemystruct* head) {
-    while(head->next != NULL) {
+void drawenemies(liststruct* head) {
+    while(head != NULL) {
         al_draw_bitmap(enemyimg, head->x, head->y, 0);
+        head = head->next;
+    }
+}
+
+void drawbullets(liststruct* head) {
+    while (head != NULL) {
+        al_draw_bitmap(playerbullet, head->x, head->y, 0);
         head = head->next;
     }
 }
@@ -264,8 +293,8 @@ void drawplayer(playerstruct* playerstruct) {
     al_draw_bitmap(playerimg, playerstruct->x, playerstruct->y, 0);
 }
 
-void enemymovement(boundingbox* box, enemystruct* head, int* enemyspeed) {
-    enemystruct* temp = head;
+void enemymovement(boundingbox* box, liststruct* head, int* enemyspeed) {
+    liststruct* temp = head;
     while (head->next != NULL) {
         head->x += *enemyspeed;
         head = head->next;
@@ -283,13 +312,27 @@ void enemymovement(boundingbox* box, enemystruct* head, int* enemyspeed) {
     }
 }
 
+void playershoot(liststruct* head, playerstruct player) {
+    while (head->next != NULL) {
+        head = head->next;
+    }
+    head->next = (liststruct*) malloc(sizeof(liststruct));
+    checkptrnull(head->next);
+    head->x = player.x + 12;
+    head->y = player.y + 20;
+    head->next = NULL;
+}
+
 void playermovement(playerstruct *player, bool* quitprog, unsigned char key[]) {
     if (key[ALLEGRO_KEY_LEFT])
         player->x--;
     if (key[ALLEGRO_KEY_RIGHT])
         player->x++;
+    if (key[ALLEGRO_KEY_DOWN]);
+
     if (key[ALLEGRO_KEY_ESCAPE])
         *quitprog = true;
     for (int i = 0; i < ALLEGRO_KEY_MAX; i++)
         key[i] &= KEY_USED;
 }
+
