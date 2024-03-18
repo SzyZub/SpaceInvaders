@@ -341,11 +341,19 @@ void playershoot(liststruct* head, playerstruct player) {
     head->next->next = NULL;
 }
 
-void playermovement(playerstruct *player, liststruct* head, bool* quitprog, unsigned char key[], int *wait) {
-    if (key[ALLEGRO_KEY_LEFT])
+void playermovement(playerstruct* player, liststruct* head, bool* quitprog, unsigned char key[], int* wait) {
+    if (key[ALLEGRO_KEY_LEFT]){
+        if (player->x < -5) {
+            player->x = 640;
+        }
         player->x += -4;
-    if (key[ALLEGRO_KEY_RIGHT])
+    }
+    if (key[ALLEGRO_KEY_RIGHT]) {
         player->x += 4;
+        if (player->x > 645) {
+            player->x = -15;
+        }
+    }
     if (key[ALLEGRO_KEY_SPACE] && *wait < 1) {
         playershoot(head, *player);
         *wait = 4;
