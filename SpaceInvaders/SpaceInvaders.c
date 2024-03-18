@@ -41,7 +41,7 @@ void init_all();
 void destroyall();
 void disp_post_draw(long *frames);
 void keyboard_update(ALLEGRO_EVENT* event, unsigned char key[]);
-bool collide(int ax1, int ay1, int ax2, int ay2, int bx1, int by1, int bx2, int by2);
+bool checkcollide(int ax1, int ay1, int ax2, int ay2, int bx1, int by1, int bx2, int by2);
 void initplayer(playerstruct *player);
 void initbox(int x1, int x2, int y1, int y2, boundingbox* box);
 void initenemylist(liststruct *head, int count);
@@ -51,8 +51,11 @@ void drawbullets(liststruct* head);
 void drawbackground();
 void drawplayer(playerstruct* playerstruct);
 void enemymovement(boundingbox* box, liststruct* head, int* enemymovement);
-void playermovement(playerstruct* player, bool* quitprog, unsigned char key[]);
 void playershoot(liststruct* head, playerstruct player);
+void playermovement(playerstruct* player, liststruct* head, bool* quitprog, unsigned char key[], int* wait);
+void deletefirst(liststruct** head);
+void bulletmovement(liststruct** head, int bulletspeed);
+void collision(liststruct** head, liststruct** enemyhead);
 
 ALLEGRO_DISPLAY* display;
 ALLEGRO_BITMAP* buffer;
@@ -73,6 +76,7 @@ int main() {
     bool redraw = true;
     long score = 0;
     long frames = 0;
+    int wait = 5;
     int enemycount = 72;
     int enemyperrow = 12;
     liststruct *headenemylist = (liststruct*) malloc(sizeof(liststruct)); 
@@ -87,16 +91,30 @@ int main() {
 	placeenemies(enemycount, enemyperrow, headenemylist);
     initbox(50, 36 + enemyperrow * 30, 15, 4 + enemycount / enemyperrow * 25, &enemycol);
     initplayer(&player);
-    int enemyspeed = 2;
+    int enemyspeed = 1;
+    int bulletspeed = 8;
     al_start_timer(timer);
-    playershoot(playerbulletlist, player);
     while (true) {
+        if (headenemylist->next == NULL) {
+            enemyspeed++;
+            initenemylist(headenemylist, enemycount);
+            placeenemies(enemycount, enemyperrow, headenemylist);
+            initbox(50, 36 + enemyperrow * 30, 15, 4 + enemycount / enemyperrow * 25, &enemycol);
+            initplayer(&player);
+        }
+        if (enemycol.y2 >= player.y) {
+            puts("gameover");
+            return;
+        }
 		al_wait_for_event(queue, &event);
         switch (event.type) {
             case ALLEGRO_EVENT_TIMER:
                 redraw = true;
+                wait--;
+                bulletmovement(&playerbulletlist, bulletspeed);
                 enemymovement(&enemycol, headenemylist, &enemyspeed);
-                playermovement(&player, &quitprog, key);
+                playermovement(&player, playerbulletlist, &quitprog, key, &wait);
+                collision(&playerbulletlist, &headenemylist);
                 break;
             case ALLEGRO_EVENT_KEY_DOWN:
                 key[event.keyboard.keycode] = KEY_USED | KEY_RELEASED;
@@ -128,6 +146,7 @@ int main() {
 	}
     destroyall();
     freeptrlist(&headenemylist);
+    freeptrlist(&playerbulletlist);
 }
 
 void checkptrnull(liststruct* head) {
@@ -226,7 +245,7 @@ void keyboard_update(ALLEGRO_EVENT* event, unsigned char key[])
     }
 }
 
-bool collide(int ax1, int ay1, int ax2, int ay2, int bx1, int by1, int bx2, int by2)
+bool checkcollide(int ax1, int ay1, int ax2, int ay2, int bx1, int by1, int bx2, int by2)
 {
     if (ax1 > bx2) return false;
     if (ax2 < bx1) return false;
@@ -253,7 +272,6 @@ void initenemylist(liststruct* head, int count) {
         checkptrnull(head->next);
         head = head->next;
     }
-    checkptrnull(head);
     head->next = NULL;
 }
 
@@ -316,23 +334,97 @@ void playershoot(liststruct* head, playerstruct player) {
     while (head->next != NULL) {
         head = head->next;
     }
-    head->next = (liststruct*) malloc(sizeof(liststruct));
-    checkptrnull(head->next);
     head->x = player.x + 12;
-    head->y = player.y + 20;
-    head->next = NULL;
+    head->y = player.y - 18;
+    head->next = (liststruct*)malloc(sizeof(liststruct));
+    checkptrnull(head->next);
+    head->next->next = NULL;
 }
 
-void playermovement(playerstruct *player, bool* quitprog, unsigned char key[]) {
+void playermovement(playerstruct *player, liststruct* head, bool* quitprog, unsigned char key[], int *wait) {
     if (key[ALLEGRO_KEY_LEFT])
-        player->x--;
+        player->x += -4;
     if (key[ALLEGRO_KEY_RIGHT])
-        player->x++;
-    if (key[ALLEGRO_KEY_DOWN]);
-
+        player->x += 4;
+    if (key[ALLEGRO_KEY_SPACE] && *wait < 1) {
+        playershoot(head, *player);
+        *wait = 4;
+    }
     if (key[ALLEGRO_KEY_ESCAPE])
         *quitprog = true;
     for (int i = 0; i < ALLEGRO_KEY_MAX; i++)
         key[i] &= KEY_USED;
+}
+
+void deletefirst(liststruct** head) {
+    liststruct* temp = *head;
+    *head = (*head)->next;
+    free(temp);
+}
+
+void bulletmovement(liststruct** head, int bulletspeed) {
+    liststruct* temp = *head;
+    if (temp->y < 5 && (*head)->next != NULL) {
+        deletefirst(head);
+    }
+    temp = *head;
+    while (temp->next != NULL) {
+        temp->y -= bulletspeed;
+        temp = temp->next;
+    }
+}
+
+void collision(liststruct** head, liststruct** enemyhead) {
+    liststruct* enemy = *enemyhead, *tempenemy = NULL, *prevenemy = NULL;
+    liststruct* tempbullet = *head, *prev = NULL;
+    int flag = 0;
+    while (tempbullet->next != NULL) {
+        tempenemy = *enemyhead;
+        while (enemy->next != NULL) {
+            if (checkcollide(tempbullet->x, tempbullet->y, tempbullet->x + 8, tempbullet->y + 16, enemy->x, enemy->y, enemy->x + 16, enemy->y + 16)) {
+                if (tempbullet == *head) { 
+                    deletefirst(head); 
+                    tempbullet = *head;
+                    flag = 1;
+                    if (enemy == *enemyhead) {
+                        deletefirst(enemyhead);
+                        enemy = *enemyhead;
+                    }
+                    else {
+                        prevenemy->next = enemy->next;
+                        free(enemy);
+                        enemy = prevenemy->next;
+                    }
+                    break;
+                }
+                else {
+                    prev -> next = tempbullet->next;
+                    free(tempbullet);
+                    tempbullet = prev->next;
+                    flag = 1;
+                    if (enemy == *enemyhead) {
+                        deletefirst(enemyhead);
+                        enemy = *enemyhead;
+                    }
+                    else {
+                        prevenemy->next = enemy->next;
+                        free(enemy);
+                        enemy = prevenemy->next;
+                    }
+                    break;
+                }
+            }
+            prevenemy = enemy;
+            enemy = enemy->next;
+            
+        }
+        if (flag == 1) {
+            flag = 0;
+            continue;
+        }
+        enemy = tempenemy;
+        prev = tempbullet;
+        tempbullet = tempbullet->next;
+    }
 }
 
