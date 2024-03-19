@@ -79,6 +79,12 @@
     </Allegro_AddonColor>
     <Allegro_AddonPrimitives>Yes</Allegro_AddonPrimitives>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Allegro_AddonImage>Yes</Allegro_AddonImage>
+    <Allegro_AddonTTF>Yes</Allegro_AddonTTF>
+    <Allegro_AddonPrimitives>Yes</Allegro_AddonPrimitives>
+    <Allegro_AddonFont>Yes</Allegro_AddonFont>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>

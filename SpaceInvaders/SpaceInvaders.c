@@ -21,6 +21,7 @@ enum status {
     alive
 };
 
+
 typedef struct playerstruct {
     int x, y;
 } playerstruct;
@@ -29,6 +30,10 @@ typedef struct liststruct {
     int x, y;
     struct liststruct* next;
 } liststruct;
+
+typedef struct strptr {
+    struct liststruct* start;
+} strptr;
 
 typedef struct boundingbox {
     int x1, x2, y1, y2;
@@ -47,14 +52,14 @@ void initbox(int x1, int x2, int y1, int y2, boundingbox* box);
 void initenemylist(liststruct *head, int count);
 void placeenemies(int enemycount, int enemyperrow, liststruct* head);
 void drawenemies(liststruct* head);
-void drawbullets(liststruct* head);
+void drawbullets(strptr head);
 void drawbackground();
 void drawplayer(playerstruct* playerstruct);
 void enemymovement(boundingbox* box, liststruct* head, int* enemymovement);
-void playershoot(liststruct* head, playerstruct player);
-void playermovement(playerstruct* player, liststruct* head, bool* quitprog, unsigned char key[], int* wait);
-void deletefirst(liststruct** head);
-void bulletmovement(liststruct** head, int bulletspeed);
+void playershoot(strptr* ptr, playerstruct player);
+void playermovement(playerstruct* player, strptr* ptr, bool* quitprog, unsigned char key[], int* wait);
+void deletefirst(strptr* ptr);
+void bulletmovement(strptr *ptr, int bulletspeed);
 void collision(liststruct** head, liststruct** enemyhead);
 
 ALLEGRO_DISPLAY* display;
@@ -82,9 +87,8 @@ int main() {
     liststruct *headenemylist = (liststruct*) malloc(sizeof(liststruct)); 
     checkptrnull(headenemylist);
     headenemylist->next = NULL;
-    liststruct *playerbulletlist = (liststruct*) malloc(sizeof(liststruct));
-    checkptrnull(playerbulletlist);
-    playerbulletlist->next = NULL;
+    strptr playerbulletlist;
+    playerbulletlist.start = NULL;
     boundingbox enemycol;
     playerstruct player;
     initenemylist(headenemylist, enemycount);
@@ -113,8 +117,8 @@ int main() {
                 wait--;
                 bulletmovement(&playerbulletlist, bulletspeed);
                 enemymovement(&enemycol, headenemylist, &enemyspeed);
-                playermovement(&player, playerbulletlist, &quitprog, key, &wait);
-                collision(&playerbulletlist, &headenemylist);
+                playermovement(&player, &playerbulletlist, &quitprog, key, &wait);
+                //collision(&playerbulletlist, &headenemylist);
                 break;
             case ALLEGRO_EVENT_KEY_DOWN:
                 key[event.keyboard.keycode] = KEY_USED | KEY_RELEASED;
@@ -146,7 +150,7 @@ int main() {
 	}
     destroyall();
     freeptrlist(&headenemylist);
-    freeptrlist(&playerbulletlist);
+    //freeptrlist(&playerbulletlist);
 }
 
 void checkptrnull(liststruct* head) {
@@ -296,10 +300,12 @@ void drawenemies(liststruct* head) {
     }
 }
 
-void drawbullets(liststruct* head) {
-    while (head != NULL) {
-        al_draw_bitmap(playerbullet, head->x, head->y, 0);
-        head = head->next;
+void drawbullets(strptr ptr) {
+    if (!(ptr.start) == NULL) {
+        while (ptr.start != NULL) {
+            al_draw_bitmap(playerbullet, ptr.start->x, ptr.start->y, 0);
+            ptr.start = ptr.start->next;
+        }
     }
 }
 
@@ -330,18 +336,30 @@ void enemymovement(boundingbox* box, liststruct* head, int* enemyspeed) {
     }
 }
 
-void playershoot(liststruct* head, playerstruct player) {
-    while (head->next != NULL) {
-        head = head->next;
+void playershoot(strptr* ptr, playerstruct player) {
+    if (!(*ptr).start == NULL) {
+        liststruct* start = (*ptr).start;
+        while (start->next != NULL) {
+            start = start->next;
+        }
+        start->next = (liststruct*)malloc(sizeof(liststruct));
+        checkptrnull(start->next);
+        start->next->x = player.x + 12;
+        start->next->y = player.y - 18;
+        start->next->next = NULL;
+        
     }
-    head->x = player.x + 12;
-    head->y = player.y - 18;
-    head->next = (liststruct*)malloc(sizeof(liststruct));
-    checkptrnull(head->next);
-    head->next->next = NULL;
+    else {
+        (*ptr).start = malloc(sizeof(liststruct));
+        checkptrnull((*ptr).start);
+        (*ptr).start->x = player.x + 12;
+        (*ptr).start->y = player.y - 18;
+        (*ptr).start->next = NULL;
+    }
+    
 }
 
-void playermovement(playerstruct* player, liststruct* head, bool* quitprog, unsigned char key[], int* wait) {
+void playermovement(playerstruct* player, strptr* ptr, bool* quitprog, unsigned char key[], int* wait) {
     if (key[ALLEGRO_KEY_LEFT]){
         if (player->x < -5) {
             player->x = 640;
@@ -355,7 +373,7 @@ void playermovement(playerstruct* player, liststruct* head, bool* quitprog, unsi
         }
     }
     if (key[ALLEGRO_KEY_SPACE] && *wait < 1) {
-        playershoot(head, *player);
+        playershoot(ptr, *player);
         *wait = 4;
     }
     if (key[ALLEGRO_KEY_ESCAPE])
@@ -364,21 +382,22 @@ void playermovement(playerstruct* player, liststruct* head, bool* quitprog, unsi
         key[i] &= KEY_USED;
 }
 
-void deletefirst(liststruct** head) {
-    liststruct* temp = *head;
-    *head = (*head)->next;
+void deletefirst(strptr* ptr) {
+    liststruct* temp = (*ptr).start;
+    (*ptr).start = (*ptr).start->next;
     free(temp);
 }
 
-void bulletmovement(liststruct** head, int bulletspeed) {
-    liststruct* temp = *head;
-    if (temp->y < 5 && (*head)->next != NULL) {
-        deletefirst(head);
-    }
-    temp = *head;
-    while (temp->next != NULL) {
-        temp->y -= bulletspeed;
-        temp = temp->next;
+void bulletmovement(strptr *ptr, int bulletspeed) {
+    if (!((*ptr).start == NULL)) {
+        if ((*ptr).start->y < 50) {
+            deletefirst(ptr);
+        }
+        liststruct* temp = (*ptr).start;
+        while (temp != NULL) {
+            temp->y -= bulletspeed;
+            temp = temp->next;
+        }
     }
 }
 
