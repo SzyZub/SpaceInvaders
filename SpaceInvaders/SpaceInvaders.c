@@ -16,12 +16,6 @@
 #define KEY_USED   1
 #define KEY_RELEASED 2
 
-enum status {
-    dead = 0,
-    alive
-};
-
-
 typedef struct playerstruct {
     int x, y;
 } playerstruct;
@@ -40,7 +34,7 @@ typedef struct boundingbox {
 } boundingbox;
 
 void checkptrnull(liststruct* head);
-void freeptrlist(liststruct** head);
+void freeptrlist(strptr* ptr);
 void init(bool test, const char* description);
 void init_all();
 void destroyall();
@@ -49,18 +43,17 @@ void keyboard_update(ALLEGRO_EVENT* event, unsigned char key[]);
 bool checkcollide(int ax1, int ay1, int ax2, int ay2, int bx1, int by1, int bx2, int by2);
 void initplayer(playerstruct *player);
 void initbox(int x1, int x2, int y1, int y2, boundingbox* box);
-void initenemylist(liststruct *head, int count);
-void placeenemies(int enemycount, int enemyperrow, liststruct* head);
-void drawenemies(liststruct* head);
+void initenemylist(strptr* ptr, int enemycount, int enemyperrow);
+void drawenemies(strptr ptr);
 void drawbullets(strptr head);
 void drawbackground();
 void drawplayer(playerstruct* playerstruct);
-void enemymovement(boundingbox* box, liststruct* head, int* enemymovement);
+void enemymovement(boundingbox* box, strptr ptr, int* enemyspeed);
 void playershoot(strptr* ptr, playerstruct player);
 void playermovement(playerstruct* player, strptr* ptr, bool* quitprog, unsigned char key[], int* wait);
 void deletefirst(strptr* ptr);
 void bulletmovement(strptr *ptr, int bulletspeed);
-void collision(liststruct** head, liststruct** enemyhead);
+void collision(strptr* head, strptr* enemyhead);
 
 ALLEGRO_DISPLAY* display;
 ALLEGRO_BITMAP* buffer;
@@ -80,45 +73,56 @@ int main() {
     bool quitprog = false;
     bool redraw = true;
     long score = 0;
+    double timing;
     long frames = 0;
     int wait = 5;
     int enemycount = 72;
     int enemyperrow = 12;
-    liststruct *headenemylist = (liststruct*) malloc(sizeof(liststruct)); 
-    checkptrnull(headenemylist);
-    headenemylist->next = NULL;
+    strptr headenemylist; 
+    headenemylist.start = NULL;
     strptr playerbulletlist;
     playerbulletlist.start = NULL;
     boundingbox enemycol;
     playerstruct player;
-    initenemylist(headenemylist, enemycount);
-	placeenemies(enemycount, enemyperrow, headenemylist);
     initbox(50, 36 + enemyperrow * 30, 15, 4 + enemycount / enemyperrow * 25, &enemycol);
     initplayer(&player);
-    int enemyspeed = 1;
+    int enemyspeed = 0;
     int bulletspeed = 8;
+    int flag = 0;
+    unsigned char round = 1;
     al_start_timer(timer);
     while (true) {
-        if (headenemylist->next == NULL) {
-            enemyspeed++;
-            initenemylist(headenemylist, enemycount);
-            placeenemies(enemycount, enemyperrow, headenemylist);
-            initbox(50, 36 + enemyperrow * 30, 15, 4 + enemycount / enemyperrow * 25, &enemycol);
-            initplayer(&player);
+        if (headenemylist.start == NULL) {
+            if (flag == 0) {
+                timing = frames;
+                flag = 1;
+            }
+            if (flag == 2) {
+                enemyspeed++;
+                freeptrlist(&headenemylist);
+                freeptrlist(&playerbulletlist);
+                initenemylist(&headenemylist, enemycount, enemyperrow);
+                initbox(50, 36 + enemyperrow * 30, 15, 4 + enemycount / enemyperrow * 25, &enemycol);
+                initplayer(&player);
+                flag = 0;
+                round++;
+            }
         }
         if (enemycol.y2 >= player.y) {
             puts("gameover");
             return;
         }
-		al_wait_for_event(queue, &event);
+        al_wait_for_event(queue, &event);
         switch (event.type) {
             case ALLEGRO_EVENT_TIMER:
                 redraw = true;
-                wait--;
-                bulletmovement(&playerbulletlist, bulletspeed);
-                enemymovement(&enemycol, headenemylist, &enemyspeed);
-                playermovement(&player, &playerbulletlist, &quitprog, key, &wait);
-                //collision(&playerbulletlist, &headenemylist);
+                if (flag == 0) {
+                    wait--;
+                    bulletmovement(&playerbulletlist, bulletspeed);
+                    enemymovement(&enemycol, headenemylist, &enemyspeed);
+                    playermovement(&player, &playerbulletlist, &quitprog, key, &wait);
+                    collision(&playerbulletlist, &headenemylist);
+                }
                 break;
             case ALLEGRO_EVENT_KEY_DOWN:
                 key[event.keyboard.keycode] = KEY_USED | KEY_RELEASED;
@@ -130,6 +134,8 @@ int main() {
                 quitprog = true;
                 break;
         }
+        if (key[ALLEGRO_KEY_ESCAPE])
+            break;
         if (quitprog) {
             break;
         }
@@ -138,19 +144,33 @@ int main() {
 		{
             al_set_target_bitmap(buffer);
             drawbackground();
-            //testing purposes
-            al_draw_rectangle(enemycol.x1, enemycol.y1, enemycol.x2, enemycol.y2, al_map_rgb(120, 120, 120), 10);
-            //
-            drawplayer(&player);
-            drawenemies(headenemylist);
-            drawbullets(playerbulletlist);
+            if (flag == 0) {
+                //testing purposes
+                al_draw_rectangle(enemycol.x1, enemycol.y1, enemycol.x2, enemycol.y2, al_map_rgb(120, 120, 120), 10);
+                //
+                drawplayer(&player);
+                drawenemies(headenemylist);
+                drawbullets(playerbulletlist);
+            }
+            else if (flag == 1) {
+                if (frames - timing > 90) {
+                    flag = 2;
+                } else if (frames - timing > 60) {
+                    al_draw_text(font, al_map_rgb(255, 255, 255), 320, 220, 0, "1");
+                    al_draw_textf(font, al_map_rgb(255, 255, 255), 260, 120, 0, "runda %d", round);
+                } else if (frames - timing > 30) {
+                    al_draw_text(font, al_map_rgb(255, 255, 255), 320, 220, 0, "2");
+                    al_draw_textf(font, al_map_rgb(255, 255, 255), 260, 120, 0, "runda %d", round);
+                } else if (frames - timing > 0) {
+                    al_draw_text(font, al_map_rgb(255, 255, 255), 320, 220, 0, "3");
+                    al_draw_textf(font, al_map_rgb(255, 255, 255), 260, 120, 0, "runda %d", round);
+                }   
+            }
             disp_post_draw(&frames);
             redraw = false;
 		}
 	}
     destroyall();
-    freeptrlist(&headenemylist);
-    //freeptrlist(&playerbulletlist);
 }
 
 void checkptrnull(liststruct* head) {
@@ -160,8 +180,8 @@ void checkptrnull(liststruct* head) {
     }
 }
 
-void freeptrlist(liststruct** head) {
-    struct liststruct* nextp = *head;
+void freeptrlist(strptr* ptr) {
+    struct liststruct* nextp = (*ptr).start;
     struct liststruct* prev = NULL;
     while (nextp != NULL)
     {
@@ -170,7 +190,7 @@ void freeptrlist(liststruct** head) {
         free(prev);
         
     }
-    *head = NULL;
+    (*ptr).start = NULL;
 }
 
 void init(bool test, const char* description)
@@ -194,7 +214,7 @@ void init_all()
     init(display, "display");
     buffer = al_create_bitmap(BUFFER_W, BUFFER_H);
     init(buffer, "bitmap buffer");
-    font = al_load_ttf_font("font.ttf", 24, 0);
+    font = al_load_ttf_font("font.ttf", 64, 0);
     init(font, "font.ttf");
     timer = al_create_timer(1.0 / 30.0);
     init(timer, "timer");
@@ -270,38 +290,36 @@ void initbox(int x1, int x2, int y1, int y2, boundingbox* box) {
     box->y2 = y2;
 }
 
-void initenemylist(liststruct* head, int count) {
-    for (int i = 0; i < count; i++) {
-        head->next = (liststruct*) malloc(sizeof(liststruct));
-        checkptrnull(head->next);
-        head = head->next;
-    }
-    head->next = NULL;
-}
-
-void placeenemies(int enemycount, int enemyperrow, liststruct* head) {
-    int tempy = -10;
-    int i = 0;
-    while(head->next != NULL) {
+void initenemylist(strptr* ptr, int enemycount, int enemyperrow) {
+    int tempy = 15;
+    (*ptr).start = (liststruct*)malloc(sizeof(liststruct));
+    checkptrnull((*ptr).start);
+    liststruct* temp = (*ptr).start;
+    temp->x = 50;
+    temp->y = tempy;
+    temp->next = NULL;
+    for (int i = 1; i < enemycount; i++) {
+        temp->next = (liststruct*)malloc(sizeof(liststruct));
+        checkptrnull(temp->next);
         if (i % enemyperrow == 0) {
             tempy += 25;
         }
-        head->x = 50 + i % enemyperrow * 30;
-        head->y = tempy;
-        head = head->next;
-        i++;
+        temp->next->x = 50 + i % enemyperrow * 30;
+        temp->next->y = tempy;
+        temp = temp->next;    
     }
+    temp->next = NULL;
 }
 
-void drawenemies(liststruct* head) {
-    while(head != NULL) {
-        al_draw_bitmap(enemyimg, head->x, head->y, 0);
-        head = head->next;
+void drawenemies(strptr ptr) {
+    while(ptr.start != NULL) {
+        al_draw_bitmap(enemyimg, ptr.start->x, ptr.start->y, 0);
+        ptr.start = ptr.start->next;
     }
 }
 
 void drawbullets(strptr ptr) {
-    if (!(ptr.start) == NULL) {
+    if (!(ptr.start == NULL)) {
         while (ptr.start != NULL) {
             al_draw_bitmap(playerbullet, ptr.start->x, ptr.start->y, 0);
             ptr.start = ptr.start->next;
@@ -317,16 +335,16 @@ void drawplayer(playerstruct* playerstruct) {
     al_draw_bitmap(playerimg, playerstruct->x, playerstruct->y, 0);
 }
 
-void enemymovement(boundingbox* box, liststruct* head, int* enemyspeed) {
-    liststruct* temp = head;
-    while (head->next != NULL) {
-        head->x += *enemyspeed;
-        head = head->next;
+void enemymovement(boundingbox* box, strptr ptr, int* enemyspeed) {
+    liststruct* temp = ptr.start;
+    while (ptr.start != NULL) {
+        ptr.start->x += *enemyspeed;
+        ptr.start = ptr.start->next;
     }
     box->x1 += *enemyspeed;
     box->x2 += *enemyspeed;
     if (box->x1 < 40 || box->x2 > 600) {
-        while (temp->next != NULL) {
+        while (temp != NULL) {
             temp->y += 30;
             temp = temp->next;
         }
@@ -337,7 +355,7 @@ void enemymovement(boundingbox* box, liststruct* head, int* enemyspeed) {
 }
 
 void playershoot(strptr* ptr, playerstruct player) {
-    if (!(*ptr).start == NULL) {
+    if (!((*ptr).start == NULL)) {
         liststruct* start = (*ptr).start;
         while (start->next != NULL) {
             start = start->next;
@@ -347,7 +365,6 @@ void playershoot(strptr* ptr, playerstruct player) {
         start->next->x = player.x + 12;
         start->next->y = player.y - 18;
         start->next->next = NULL;
-        
     }
     else {
         (*ptr).start = malloc(sizeof(liststruct));
@@ -356,7 +373,6 @@ void playershoot(strptr* ptr, playerstruct player) {
         (*ptr).start->y = player.y - 18;
         (*ptr).start->next = NULL;
     }
-    
 }
 
 void playermovement(playerstruct* player, strptr* ptr, bool* quitprog, unsigned char key[], int* wait) {
@@ -376,8 +392,6 @@ void playermovement(playerstruct* player, strptr* ptr, bool* quitprog, unsigned 
         playershoot(ptr, *player);
         *wait = 4;
     }
-    if (key[ALLEGRO_KEY_ESCAPE])
-        *quitprog = true;
     for (int i = 0; i < ALLEGRO_KEY_MAX; i++)
         key[i] &= KEY_USED;
 }
@@ -390,7 +404,7 @@ void deletefirst(strptr* ptr) {
 
 void bulletmovement(strptr *ptr, int bulletspeed) {
     if (!((*ptr).start == NULL)) {
-        if ((*ptr).start->y < 50) {
+        if ((*ptr).start->y < 5) {
             deletefirst(ptr);
         }
         liststruct* temp = (*ptr).start;
@@ -401,21 +415,21 @@ void bulletmovement(strptr *ptr, int bulletspeed) {
     }
 }
 
-void collision(liststruct** head, liststruct** enemyhead) {
-    liststruct* enemy = *enemyhead, *tempenemy = NULL, *prevenemy = NULL;
-    liststruct* tempbullet = *head, *prev = NULL;
+void collision(strptr* head, strptr* enemyhead) {
+    liststruct* enemy = (*enemyhead).start, *tempenemy = NULL, *prevenemy = NULL;
+    liststruct* tempbullet = (*head).start, *prev = NULL;
     int flag = 0;
-    while (tempbullet->next != NULL) {
-        tempenemy = *enemyhead;
-        while (enemy->next != NULL) {
+    while (tempbullet != NULL) {
+        tempenemy = (*enemyhead).start;
+        while (enemy != NULL) {
             if (checkcollide(tempbullet->x, tempbullet->y, tempbullet->x + 8, tempbullet->y + 16, enemy->x, enemy->y, enemy->x + 16, enemy->y + 16)) {
-                if (tempbullet == *head) { 
+                if (tempbullet == (*head).start) { 
                     deletefirst(head); 
-                    tempbullet = *head;
+                    tempbullet = (*head).start;
                     flag = 1;
-                    if (enemy == *enemyhead) {
+                    if (enemy == (*enemyhead).start) {
                         deletefirst(enemyhead);
-                        enemy = *enemyhead;
+                        enemy = (*enemyhead).start;
                     }
                     else {
                         prevenemy->next = enemy->next;
@@ -429,9 +443,9 @@ void collision(liststruct** head, liststruct** enemyhead) {
                     free(tempbullet);
                     tempbullet = prev->next;
                     flag = 1;
-                    if (enemy == *enemyhead) {
+                    if (enemy == (*enemyhead).start) {
                         deletefirst(enemyhead);
-                        enemy = *enemyhead;
+                        enemy = (*enemyhead).start;
                     }
                     else {
                         prevenemy->next = enemy->next;
@@ -443,7 +457,6 @@ void collision(liststruct** head, liststruct** enemyhead) {
             }
             prevenemy = enemy;
             enemy = enemy->next;
-            
         }
         if (flag == 1) {
             flag = 0;
