@@ -5,7 +5,6 @@
 #include <allegro5/allegro_font.h>
 #include <allegro5/allegro_ttf.h>
 #include <allegro5/allegro_image.h>
-//testing purposes
 #include <allegro5/allegro_primitives.h>
 
 #define BUFFER_W 640
@@ -17,9 +16,11 @@
 #define KEY_RELEASED 2
 
 enum screenflag {
-    startorplay = 0,
+    start = 0,
+    play,
     countdown,
-    initiation
+    initiation,
+    gameover
 };
 
 typedef struct playerstruct {
@@ -54,7 +55,7 @@ typedef struct gamestate {
 void bulletmovement(bullethead* ptr, int bulletspeed);
 bool checkcollide(int ax1, int ay1, int ax2, int ay2, int bx1, int by1, int bx2, int by2);
 void checkptrnull(liststruct* head);
-void collision(bullethead* head, enemyhead* enemyhead);
+void collision(bullethead* head, enemyhead* enemyhead, gamestate *state);
 void bullet_deletefirst(bullethead* ptr);
 void enemy_deletefirst(enemyhead* ptr);
 void destroyall();
@@ -69,7 +70,7 @@ void enemy_freeptrlist(enemyhead* ptr);
 void init(bool test, const char* description);
 void init_all();
 void initbox(int x1, int x2, int y1, int y2, boundingbox* box);
-void initenemylist(enemyhead* ptr, boundingbox* enemycol);
+void initenemylist(enemyhead* ptr, boundingbox* enemycol, gamestate state);
 void initgamestate(gamestate* state);
 void initplayer(playerstruct* player);
 void keyboard_update();
@@ -79,6 +80,7 @@ void playershoot(bullethead* ptr, playerstruct player);
 ALLEGRO_DISPLAY* display;
 ALLEGRO_BITMAP* buffer;
 ALLEGRO_FONT* font;
+ALLEGRO_FONT* smallfont;
 ALLEGRO_TIMER* timer;
 ALLEGRO_EVENT_QUEUE* queue;
 ALLEGRO_BITMAP* playerimg;
@@ -87,7 +89,6 @@ ALLEGRO_BITMAP* playerbullet;
 ALLEGRO_BITMAP* enemyimg;
 ALLEGRO_EVENT event;
 unsigned char key[ALLEGRO_KEY_MAX];
-
 
 int main() {
     enemyhead headenemylist; 
@@ -98,40 +99,40 @@ int main() {
     playerstruct player;
     gamestate state;
     memset(key, 0, sizeof(key));
-    initgamestate(&state);
     init_all();
+    initgamestate(&state);
     initplayer(&player);
     al_start_timer(timer);
     while (true) {
         if (headenemylist.start == NULL) {
-            if (state.flag == startorplay) {
-                state.timing = state.frames;
-                state.flag = countdown;
-            }
             if (state.flag == initiation) {
                 enemy_freeptrlist(&headenemylist);
                 bullet_freeptrlist(&playerbulletlist);
-                initenemylist(&headenemylist, &enemycol);
+                initenemylist(&headenemylist, &enemycol, state);
                 initplayer(&player);
-                state.flag = startorplay;
-                headenemylist.enemyspeed++;
+                state.flag = play;
                 state.round++;
             }
-        }
-        if (state.flag == startorplay && enemycol.y2 >= player.y) {
-            puts("gameover");
-            return;
+            else if (state.flag == play) {
+                state.score += 500;
+                state.flag = countdown;
+                state.timing = state.frames;
+            }
         }
         al_wait_for_event(queue, &event);
         switch (event.type) {
             case ALLEGRO_EVENT_TIMER:
                 state.redraw = true;
-                if (state.flag == startorplay) {
+                if (state.flag == play) {
                     player.wait--;
                     bulletmovement(&playerbulletlist, player.bulletspeed);
                     enemymovement(&enemycol, &headenemylist);
                     playermovement(&player, &playerbulletlist);
-                    collision(&playerbulletlist, &headenemylist);
+                    collision(&playerbulletlist, &headenemylist, &state);
+                    if (enemycol.y2 >= player.y) {
+                        state.flag = gameover;
+                        state.timing = state.frames;
+                    }
                 }
                 break;
             case ALLEGRO_EVENT_KEY_DOWN:
@@ -144,42 +145,59 @@ int main() {
                 state.quitprog = true;
                 break;
         }
-        if (key[ALLEGRO_KEY_ESCAPE])
+        if (key[ALLEGRO_KEY_ESCAPE] || state.quitprog)
             break;
-        if (state.quitprog) {
-            break;
-        }
         keyboard_update(&event, key);
 		if (state.redraw && al_is_event_queue_empty(queue))
 		{
             al_set_target_bitmap(buffer);
             drawbackground();
-            if (state.flag == startorplay) {
-                //testing purposes
-                al_draw_rectangle(enemycol.x1, enemycol.y1, enemycol.x2, enemycol.y2, al_map_rgb(120, 120, 120), 10);
-                //
+            if (state.flag == play) {
                 drawplayer(&player);
                 drawenemies(headenemylist);
                 drawbullets(playerbulletlist);
-            }
-            else if (state.flag == countdown) {
+                al_draw_textf(smallfont, al_map_rgb(255, 255, 255), BUFFER_W/30, 0, 0, "punkty: %d", state.score);
+            } else if (state.flag == countdown) {
                 if (state.frames - state.timing > 90) {
                     state.flag = initiation;
-                } else if (state.frames - state.timing > 60) {
-                    al_draw_text(font, al_map_rgb(255, 255, 255), 320, 220, 0, "1");
-                    al_draw_textf(font, al_map_rgb(255, 255, 255), 260, 120, 0, "runda %d", state.round);
-                } else if (state.frames - state.timing > 30) {
-                    al_draw_text(font, al_map_rgb(255, 255, 255), 320, 220, 0, "2");
-                    al_draw_textf(font, al_map_rgb(255, 255, 255), 260, 120, 0, "runda %d", state.round);
-                } else if (state.frames - state.timing > 0) {
-                    al_draw_text(font, al_map_rgb(255, 255, 255), 320, 220, 0, "3");
-                    al_draw_textf(font, al_map_rgb(255, 255, 255), 260, 120, 0, "runda %d", state.round);
-                }   
+                }
+                else if (state.frames - state.timing > 60) {
+                    al_draw_text(font, al_map_rgb(255, 255, 255), BUFFER_W / 2, BUFFER_H/2, 0, "1");
+                    al_draw_textf(font, al_map_rgb(255, 255, 255), BUFFER_W*4/10, BUFFER_H/3, 0, "runda %d", state.round);
+                }
+                else if (state.frames - state.timing > 30) {
+                    al_draw_text(font, al_map_rgb(255, 255, 255), BUFFER_W / 2, BUFFER_H/2, 0, "2");
+                    al_draw_textf(font, al_map_rgb(255, 255, 255), BUFFER_W * 4 / 10, BUFFER_H / 3, 0, "runda %d", state.round);
+                }
+                else if (state.frames - state.timing > 0) {
+                    al_draw_text(font, al_map_rgb(255, 255, 255), BUFFER_W/2, BUFFER_H/2, 0, "3");
+                    al_draw_textf(font, al_map_rgb(255, 255, 255), BUFFER_W * 4 / 10, BUFFER_H / 3, 0, "runda %d", state.round);
+                }
+            } else if (state.flag == start) {
+                al_draw_text(font, al_map_rgb(255, 255, 255), BUFFER_W/8, BUFFER_H / 3, 0, "nacisnij spacje zeby");
+                al_draw_text(font, al_map_rgb(255, 255, 255), BUFFER_W / 8, BUFFER_H / 2, 0, "rozpoczac");
+                if (key[ALLEGRO_KEY_SPACE]) {
+                    state.flag = countdown;
+                    state.timing = state.frames;
+                }         
             }
-            disp_post_draw(&state);
-            state.redraw = false;
-		}
-	}
+            else if (state.flag == gameover) {
+                al_draw_text(font, al_map_rgb(255, 255, 255), BUFFER_W / 8, BUFFER_H / 10, 0, "nacisnij spacje zeby");
+                al_draw_text(font, al_map_rgb(255, 255, 255), BUFFER_W / 8, BUFFER_H * 5 / 20, 0, "rozpoczac ponownie");
+                al_draw_textf(font, al_map_rgb(255, 255, 255), BUFFER_W / 8, BUFFER_H * 7 / 10, 0, "liczba punktow: %d", state.score);
+                if (state.frames - state.timing > 60) {
+                    if (key[ALLEGRO_KEY_SPACE]) {
+                        enemy_freeptrlist(&headenemylist);
+                        initgamestate(&state);
+                        state.flag = countdown;
+                        state.timing = state.frames;
+                    }
+                }              
+            }
+        }
+        disp_post_draw(&state);
+        state.redraw = false;
+    }
     destroyall();
 }
 
@@ -212,7 +230,7 @@ void checkptrnull(liststruct* head) {
     }
 }
 
-void collision(bullethead* head, enemyhead* enemyhead) {
+void collision(bullethead* head, enemyhead* enemyhead, gamestate* state) {
     liststruct* enemy = (*enemyhead).start, * tempenemy = NULL, * prevenemy = NULL;
     liststruct* tempbullet = (*head).start, * prev = NULL;
     int flag = 0;
@@ -227,11 +245,13 @@ void collision(bullethead* head, enemyhead* enemyhead) {
                     if (enemy == (*enemyhead).start) {
                         enemy_deletefirst(enemyhead);
                         enemy = (*enemyhead).start;
+                        (*state).score += 15;
                     }
                     else {
                         prevenemy->next = enemy->next;
                         free(enemy);
                         enemy = prevenemy->next;
+                        (*state).score += 15;
                     }
                     break;
                 }
@@ -243,11 +263,13 @@ void collision(bullethead* head, enemyhead* enemyhead) {
                     if (enemy == (*enemyhead).start) {
                         enemy_deletefirst(enemyhead);
                         enemy = (*enemyhead).start;
+                        (*state).score += 15;
                     }
                     else {
                         prevenemy->next = enemy->next;
                         free(enemy);
                         enemy = prevenemy->next;
+                        (*state).score += 15;
                     }
                     break;
                 }
@@ -363,6 +385,7 @@ void enemy_freeptrlist(enemyhead* ptr) {
         nextp = nextp->next;
         free(prev);
     }
+    (*ptr).start = NULL;
 }
 
 void init(bool test, const char* description)
@@ -379,15 +402,15 @@ void init_all()
     init(al_init_font_addon(), "font addon");
     init(al_init_ttf_addon(), "ttf addon");
     init(al_init_image_addon(), "image addon");
-    //testing purposes
     init(al_init_primitives_addon(), "primitives addon");
-    //
     display = al_create_display(DISP_W, DISP_H);
     init(display, "display");
     buffer = al_create_bitmap(BUFFER_W, BUFFER_H);
     init(buffer, "bitmap buffer");
     font = al_load_ttf_font("font.ttf", BUFFER_W/10, 0);
     init(font, "font.ttf");
+    smallfont = al_load_ttf_font("font.ttf", BUFFER_W /30, 0);
+    init(smallfont, "font.ttf - small");
     timer = al_create_timer(1.0 / 30.0);
     init(timer, "timer");
     queue = al_create_event_queue();
@@ -412,16 +435,18 @@ void initbox(int x1, int x2, int y1, int y2, boundingbox* box) {
     box->y2 = y2;
 }
 
-void initenemylist(enemyhead* ptr, boundingbox* enemycol) {
+void initenemylist(enemyhead* ptr, boundingbox* enemycol, gamestate state) {
     int tempy = BUFFER_H/32;
-    (*ptr).enemycount = 72;
-    (*ptr).enemyperrow = 12;
-    (*ptr).enemyspeed = 0;
+    if (state.round == 1) {
+        (*ptr).enemycount = 72;
+        (*ptr).enemyperrow = 12;
+    }
+    (*ptr).enemyspeed = state.round;
     (*ptr).start = (liststruct*)malloc(sizeof(liststruct));
-    initbox(BUFFER_W/10, BUFFER_W/20 + (*ptr).enemyperrow * BUFFER_W/20, BUFFER_H/32, (*ptr).enemycount / (*ptr).enemyperrow * BUFFER_H/19, enemycol);
+    initbox(BUFFER_W / 5, BUFFER_W / 5 + ((*ptr).enemyperrow - 1) * BUFFER_W / 21 + 16, BUFFER_H / 32, (*ptr).enemycount / (*ptr).enemyperrow * BUFFER_H / 20 + tempy, enemycol);
     checkptrnull((*ptr).start);
     liststruct* temp = (*ptr).start;
-    temp->x = BUFFER_W/10;
+    temp->x = BUFFER_W/5;
     temp->y = tempy;
     temp->next = NULL;
     for (int i = 1; i < (*ptr).enemycount; i++) {
@@ -430,7 +455,7 @@ void initenemylist(enemyhead* ptr, boundingbox* enemycol) {
         if (i % (*ptr).enemyperrow == 0) {
             tempy += BUFFER_H/20;
         }
-        temp->next->x = BUFFER_W/10 + i % (*ptr).enemyperrow * BUFFER_W/21;
+        temp->next->x = BUFFER_W/5 + i % (*ptr).enemyperrow * BUFFER_W/21;
         temp->next->y = tempy;
         temp = temp->next;
     }
@@ -443,12 +468,12 @@ void initgamestate(gamestate* state) {
     (*state).score = 0;
     (*state).frames = 0;
     (*state).round = 1;
-    (*state).flag = startorplay;
+    (*state).flag = start;
 }
 
 void initplayer(playerstruct* player) {
     player->x = BUFFER_W/2;
-    player->y = BUFFER_H*8/10;
+    player->y = BUFFER_H*17/20;
     player->wait = 5;
     player->bulletspeed = BUFFER_H/60;
 }
