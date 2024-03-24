@@ -153,6 +153,9 @@
     <Image Include="bullet_me.png" />
     <Image Include="player.png" />
   </ItemGroup>
+  <ItemGroup>
+    <Font Include="font.ttf" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
     <Import Project="..\packages\AllegroDeps.1.14.0\build\native\AllegroDeps.targets" Condition="Exists('..\packages\AllegroDeps.1.14.0\build\native\AllegroDeps.targets')" />

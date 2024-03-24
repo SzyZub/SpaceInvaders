@@ -1,11 +1,13 @@
 ﻿#include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
+#include <stdlib.h>
 #include <allegro5/allegro5.h>
 #include <allegro5/allegro_font.h>
 #include <allegro5/allegro_ttf.h>
 #include <allegro5/allegro_image.h>
 #include <allegro5/allegro_primitives.h>
+#include <time.h>
 
 #define DISP_W 1280
 #define DISP_H 960
@@ -30,7 +32,7 @@ typedef struct liststruct {
 } liststruct;
 
 typedef struct enemyhead {
-    int enemycount, enemyperrow, enemyspeed;
+    int enemycount, enemyperrow, enemyspeed, bulletspeed;
     struct liststruct* start;
 } enemyhead;
 
@@ -50,24 +52,25 @@ typedef struct gamestate {
 } gamestate;
 
 void destroyall();
-void collision(bullethead* head, enemyhead* enemyhead, gamestate* state, boundingbox enemycol);
+void pbullets_collision(bullethead* head, enemyhead* enemyhead, gamestate* state, boundingbox enemycol);
+bool ebullets_collision(bullethead* ebhead, playerstruct player);
 bool checkcollide(int ax1, int ay1, int ax2, int ay2, int bx1, int by1, int bx2, int by2);
 void checkptrnull(liststruct* head);
-void state_handle_event(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead);
-void state_exit(enemyhead* ehead, bullethead* bhead);
-void state_draw(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead);
+void state_handle_event(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead, bullethead* ebhead);
+void state_exit(enemyhead* ehead, bullethead* bhead, bullethead* ebhead);
+void state_draw(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead, bullethead* ebhead);
 void state_draw_gameover(gamestate* state, enemyhead* head);
 void state_draw_start(gamestate* state);
 void state_draw_countdown(gamestate* state);
-void state_draw_play(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead);
-void state_init_initiation(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead);
+void state_draw_play(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead, bullethead* ebhead);
+void state_init_initiation(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead, bullethead *ebhead);
 void state_init_play(gamestate* state);
-void state_gamelogic(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead);
+void state_gamelogic(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead, bullethead* ebhead);
 void state_keyboard_update();
 void bullet_movement(bullethead* ptr, int bulletspeed);
 void bullet_deletefirst(bullethead* ptr);
 void bullet_freeptrlist(bullethead* ptr);
-void bullet_draw(bullethead ptr);
+void bullet_draw(bullethead bhead, bullethead ebhead);
 void init_test(bool test, const char* description);;
 void init_all();
 void init_enemy(enemyhead* ptr, boundingbox* enemycol, gamestate state);
@@ -75,7 +78,8 @@ void init_state(gamestate* state);
 void init_player(playerstruct* player);
 void enemy_deletefirst(enemyhead* ptr);
 void enemy_draw(enemyhead ptr);
-void enemy_movement(boundingbox* box, enemyhead* ptr);
+void enemy_movement(boundingbox* box, enemyhead* ptr, bullethead* ebhead);
+void enemy_shoot(bullethead* ebhead, int x, int y);
 void enemy_freeptrlist(enemyhead* ptr);
 void enemy_enemycol_check(boundingbox* enemycol, enemyhead headenemylist);
 void player_movement(playerstruct* player, bullethead* ptr);
@@ -96,47 +100,49 @@ ALLEGRO_EVENT event;
 unsigned char key[ALLEGRO_KEY_MAX];
 
 int main() {
+    srand(time(0));
     enemyhead headenemylist; 
     bullethead playerbulletlist;
+    bullethead enemybulletlist;
     boundingbox enemycol;
     playerstruct player;
     gamestate state;
     headenemylist.start = NULL; 
     playerbulletlist.start = NULL; 
+    enemybulletlist.start = NULL;
     memset(key, 0, sizeof(key));
     init_all();
     init_state(&state);
     while (true) {
         if (headenemylist.start == NULL) {
             if (state.flag == initiation) {
-                state_init_initiation(&state, &player, &headenemylist, &enemycol, &playerbulletlist);
+                state_init_initiation(&state, &player, &headenemylist, &enemycol, &playerbulletlist, &enemybulletlist);
             }
             else if (state.flag == play) {
                 state_init_play(&state);
             }
         }
-        
-        state_handle_event(&state, &player, &headenemylist, &enemycol, &playerbulletlist);
+        state_handle_event(&state, &player, &headenemylist, &enemycol, &playerbulletlist, &enemybulletlist);
         if (key[ALLEGRO_KEY_ESCAPE] || state.quitprog) {
-            state_exit(&headenemylist, &playerbulletlist);
+            state_exit(&headenemylist, &playerbulletlist, &enemybulletlist);
             break;
         }
         state_keyboard_update(&event, key);
 		if (state.redraw && al_is_event_queue_empty(queue))
 		{
-            state_draw(&state, &player, &headenemylist, &enemycol, &playerbulletlist);
+            state_draw(&state, &player, &headenemylist, &enemycol, &playerbulletlist, &enemybulletlist);
         }       
     }
     destroyall();
 }
 
-void state_handle_event(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead) {
+void state_handle_event(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead, bullethead* ebhead) {
     al_wait_for_event(queue, &event);
     switch (event.type) {
         case ALLEGRO_EVENT_TIMER:
             (*state).redraw = true;
             if ((*state).flag == play) {
-                state_gamelogic(state, player, ehead, enemycol, bhead);
+                state_gamelogic(state, player, ehead, enemycol, bhead, ebhead);
             }
             break;
         case ALLEGRO_EVENT_KEY_DOWN:
@@ -163,7 +169,7 @@ void destroyall() {
     al_destroy_bitmap(buffer);
 }
 
-void collision(bullethead* head, enemyhead* enemyhead, gamestate* state, boundingbox enemycol) {
+void pbullets_collision(bullethead* head, enemyhead* enemyhead, gamestate* state, boundingbox enemycol) {
     liststruct* enemy = (*enemyhead).start, * tempenemy = NULL, * prevenemy = NULL;
     liststruct* tempbullet = (*head).start, * prev = NULL;
     int flag = 0;
@@ -225,6 +231,19 @@ void collision(bullethead* head, enemyhead* enemyhead, gamestate* state, boundin
     }
 }
 
+bool ebullets_collision(bullethead* ebhead, playerstruct player) {
+    liststruct* head = (*ebhead).start;
+    if ((*ebhead).start != NULL) {
+        while (head != NULL) {
+            if (checkcollide(player.x +5, player.y + 10, player.x + 59, player.y + 64, head->x + 1, head->y + 2, head->x + 15, head->y + 30)) {
+                return true;
+            }
+            head = head->next;
+        }
+    }
+    return false;
+}
+
 bool checkcollide(int ax1, int ay1, int ax2, int ay2, int bx1, int by1, int bx2, int by2)
 {
     if (ax1 > bx2) return false;
@@ -241,17 +260,18 @@ void checkptrnull(liststruct* head) {
     }
 }
 
-void state_exit(enemyhead* ehead, bullethead* bhead) {
+void state_exit(enemyhead* ehead, bullethead* bhead, bullethead* ebhead) {
     enemy_freeptrlist(ehead);
     bullet_freeptrlist(bhead);
+    bullet_freeptrlist(ebhead);
 }
 
-void state_draw(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead) {
+void state_draw(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead, bullethead* ebhead) {
     al_set_target_bitmap(buffer);
     al_clear_to_color(al_map_rgb(0, 0, 0));
     switch ((*state).flag) {
     case play:
-        state_draw_play(state, player, ehead, &enemycol, bhead);
+        state_draw_play(state, player, ehead, enemycol, bhead, ebhead);
         break;
     case countdown:
         state_draw_countdown(state);
@@ -311,20 +331,22 @@ void state_draw_countdown(gamestate* state) {
     }
 }
 
-void state_draw_play(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead) {
+void state_draw_play(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead, bullethead* ebhead) {
     player_draw(player);
     enemy_draw(*ehead);
-    bullet_draw(*bhead);
+    bullet_draw(*bhead, *ebhead);
     if (!((*state).frames % 6)) {
-        enemy_enemycol_check(&enemycol, *ehead);
+        enemy_enemycol_check(enemycol, *ehead);
     }
+    al_draw_rectangle((*enemycol).x1, (*enemycol).y1, (*enemycol).x2, (*enemycol).y2, al_map_rgb(255, 255, 255), 5);
     al_draw_textf(smallfont, al_map_rgb(255, 255, 255), DISP_W / 30, 0, 0, "Punkty: %d", (*state).score);
     al_draw_textf(smallfont, al_map_rgb(255, 255, 255), DISP_W * 13 / 15, 0, 0, "Runda: %d", (*state).round);
 }
 
-void state_init_initiation(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead) {
+void state_init_initiation(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead, bullethead* ebhead) {
     enemy_freeptrlist(ehead);
     bullet_freeptrlist(bhead);
+    bullet_freeptrlist(ebhead);
     init_enemy(ehead, enemycol, *state);
     init_player(player);
     enemy_enemycol_check(enemycol, *ehead);
@@ -338,13 +360,14 @@ void state_init_play(gamestate* state) {
     (*state).timing = (*state).frames;
 }
 
-void state_gamelogic(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead) {
+void state_gamelogic(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead, bullethead* ebhead) {
     bullet_movement(bhead, (*player).bulletspeed);
-    enemy_movement(enemycol, ehead);
+    bullet_movement(ebhead, (*ehead).bulletspeed);
+    enemy_movement(enemycol, ehead, ebhead);
     player_movement(player, bhead);
-    collision(bhead, ehead, state, *enemycol);
+    pbullets_collision(bhead, ehead, state, *enemycol);
     (*player).wait--;
-    if ((*enemycol).y2 >= (*player).y) {
+    if ((*enemycol).y2 >= (*player).y || ebullets_collision(ebhead, *player)) {
         (*state).flag = gameover;
         (*state).timing = (*state).frames;
     }
@@ -397,11 +420,17 @@ void bullet_freeptrlist(bullethead* ptr) {
     (*ptr).start = NULL;
 }
 
-void bullet_draw(bullethead ptr) {
-    if (!(ptr.start == NULL)) {
-        while (ptr.start != NULL) {
-            al_draw_bitmap(playerbullet, ptr.start->x, ptr.start->y, 0);
-            ptr.start = ptr.start->next;
+void bullet_draw(bullethead bhead, bullethead ebhead) {
+    if (!(bhead.start == NULL)) {
+        while (bhead.start != NULL) {
+            al_draw_bitmap(playerbullet, bhead.start->x, bhead.start->y, 0);
+            bhead.start = bhead.start->next;
+        }
+    }
+    if (!(ebhead.start == NULL)) {
+        while (ebhead.start != NULL) {
+            al_draw_bitmap(enemybullet, ebhead.start->x, ebhead.start->y, 0);
+            ebhead.start = ebhead.start->next;
         }
     }
 }
@@ -454,6 +483,7 @@ void init_enemy(enemyhead* ptr, boundingbox* enemycol, gamestate state) {
         (*ptr).enemyperrow = 12;
     }
     (*ptr).enemyspeed = 10 + state.round;
+    (*ptr).bulletspeed = -4;
     (*ptr).start = (liststruct*)malloc(sizeof(liststruct));
     checkptrnull((*ptr).start);
     liststruct* temp = (*ptr).start;
@@ -515,11 +545,14 @@ void enemy_draw(enemyhead ptr) {
     }
 }
 
-void enemy_movement(boundingbox* box, enemyhead* ptr) {
+void enemy_movement(boundingbox* box, enemyhead* ptr, bullethead* ebhead) {
     liststruct* temp = (*ptr).start;
     liststruct* copy = (*ptr).start;
     while (copy != NULL) {
         copy->x += (*ptr).enemyspeed;
+        if (!(rand() % 1200)) {
+            enemy_shoot(ebhead, copy->x, copy->y);
+        }  
         copy = copy->next;
     }
     box->x1 += (*ptr).enemyspeed;
@@ -532,6 +565,27 @@ void enemy_movement(boundingbox* box, enemyhead* ptr) {
         box->y1 += DISP_H / 20;
         box->y2 += DISP_H / 20;
         (*ptr).enemyspeed *= -1;
+    }
+}
+
+void enemy_shoot(bullethead* ebhead, int x, int y) {
+    if (!((*ebhead).start == NULL)) {
+        liststruct* start = (*ebhead).start;
+        while (start->next != NULL) {
+            start = start->next;
+        }
+        start->next = (liststruct*)malloc(sizeof(liststruct));
+        checkptrnull(start->next);
+        start->next->x = x + 16;
+        start->next->y = y + 32;
+        start->next->next = NULL;
+    }
+    else {
+        (*ebhead).start = malloc(sizeof(liststruct));
+        checkptrnull((*ebhead).start);
+        (*ebhead).start->x = x + 16;
+        (*ebhead).start->y = y + 32;
+        (*ebhead).start->next = NULL;
     }
 }
 
@@ -609,7 +663,13 @@ void player_shoot(bullethead* ptr, playerstruct player) {
 }
 
 
+/*
+IMPLEMENT IT SO ENEMY BULLETS DISSAPEAR WHEN HITING THE GROUND
 
+
+
+
+*/
 
 
 
