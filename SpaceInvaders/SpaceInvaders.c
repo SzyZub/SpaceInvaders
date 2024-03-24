@@ -49,30 +49,38 @@ typedef struct gamestate {
     int flag;
 } gamestate;
 
-void bulletmovement(bullethead* ptr, int bulletspeed);
+void destroyall();
+void collision(bullethead* head, enemyhead* enemyhead, gamestate* state, boundingbox enemycol);
 bool checkcollide(int ax1, int ay1, int ax2, int ay2, int bx1, int by1, int bx2, int by2);
 void checkptrnull(liststruct* head);
-void collision(bullethead* head, enemyhead* enemyhead, gamestate *state, boundingbox enemycol);
+void state_handle_event(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead);
+void state_exit(enemyhead* ehead, bullethead* bhead);
+void state_draw(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead);
+void state_draw_gameover(gamestate* state, enemyhead* head);
+void state_draw_start(gamestate* state);
+void state_draw_countdown(gamestate* state);
+void state_draw_play(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead);
+void state_init_initiation(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead);
+void state_init_play(gamestate* state);
+void state_gamelogic(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead);
+void state_keyboard_update();
+void bullet_movement(bullethead* ptr, int bulletspeed);
 void bullet_deletefirst(bullethead* ptr);
-void enemy_deletefirst(enemyhead* ptr);
-void destroyall();
-void disp_post_draw(gamestate* state);
-void drawbackground();
-void drawbullets(bullethead ptr);
-void drawenemies(enemyhead ptr);
-void drawplayer(playerstruct* playerstruct);
-void enemycol_check(boundingbox* enemycol, enemyhead headenemylist);
-void enemymovement(boundingbox* box, enemyhead* ptr);
 void bullet_freeptrlist(bullethead* ptr);
-void enemy_freeptrlist(enemyhead* ptr);
-void init(bool test, const char* description);
+void bullet_draw(bullethead ptr);
+void init_test(bool test, const char* description);;
 void init_all();
-void initenemylist(enemyhead* ptr, boundingbox* enemycol, gamestate state);
-void initgamestate(gamestate* state);
-void initplayer(playerstruct* player);
-void keyboard_update();
-void playermovement(playerstruct* player, bullethead* ptr);
-void playershoot(bullethead* ptr, playerstruct player);
+void init_enemy(enemyhead* ptr, boundingbox* enemycol, gamestate state);
+void init_state(gamestate* state);
+void init_player(playerstruct* player);
+void enemy_deletefirst(enemyhead* ptr);
+void enemy_draw(enemyhead ptr);
+void enemy_movement(boundingbox* box, enemyhead* ptr);
+void enemy_freeptrlist(enemyhead* ptr);
+void enemy_enemycol_check(boundingbox* enemycol, enemyhead headenemylist);
+void player_movement(playerstruct* player, bullethead* ptr);
+void player_draw(playerstruct* playerstruct);
+void player_shoot(bullethead* ptr, playerstruct player);
 
 ALLEGRO_DISPLAY* display;
 ALLEGRO_BITMAP* buffer;
@@ -89,146 +97,70 @@ unsigned char key[ALLEGRO_KEY_MAX];
 
 int main() {
     enemyhead headenemylist; 
-    headenemylist.start = NULL;
     bullethead playerbulletlist;
-    playerbulletlist.start = NULL;
     boundingbox enemycol;
     playerstruct player;
     gamestate state;
+    headenemylist.start = NULL; 
+    playerbulletlist.start = NULL; 
     memset(key, 0, sizeof(key));
     init_all();
-    initgamestate(&state);
-    al_start_timer(timer);
+    init_state(&state);
     while (true) {
         if (headenemylist.start == NULL) {
             if (state.flag == initiation) {
-                enemy_freeptrlist(&headenemylist);
-                bullet_freeptrlist(&playerbulletlist);
-                initenemylist(&headenemylist, &enemycol, state);
-                initplayer(&player);
-                enemycol_check(&enemycol, headenemylist);
-                state.flag = play;
-                state.round++;
+                state_init_initiation(&state, &player, &headenemylist, &enemycol, &playerbulletlist);
             }
             else if (state.flag == play) {
-                state.score += 500;
-                state.flag = countdown;
-                state.timing = state.frames;
+                state_init_play(&state);
             }
         }
-        al_wait_for_event(queue, &event);
-        switch (event.type) {
-            case ALLEGRO_EVENT_TIMER:
-                state.redraw = true;
-                if (state.flag == play) {
-                    bulletmovement(&playerbulletlist, player.bulletspeed);
-                    enemymovement(&enemycol, &headenemylist);
-                    playermovement(&player, &playerbulletlist);
-                    collision(&playerbulletlist, &headenemylist, &state, enemycol);
-                    player.wait--;
-                    if (enemycol.y2 >= player.y) {
-                        state.flag = gameover;
-                        state.timing = state.frames;
-                    }
-                }
-                break;
-            case ALLEGRO_EVENT_KEY_DOWN:
-                key[event.keyboard.keycode] = KEY_USED | KEY_RELEASED;
-                break;
-            case ALLEGRO_EVENT_KEY_UP:
-                key[event.keyboard.keycode] &= KEY_RELEASED;
-                break;
-            case ALLEGRO_EVENT_DISPLAY_CLOSE:
-                state.quitprog = true;
-                break;
-        }
-        if (key[ALLEGRO_KEY_ESCAPE] || state.quitprog)
+        
+        state_handle_event(&state, &player, &headenemylist, &enemycol, &playerbulletlist);
+        if (key[ALLEGRO_KEY_ESCAPE] || state.quitprog) {
+            state_exit(&headenemylist, &playerbulletlist);
             break;
-        keyboard_update(&event, key);
+        }
+        state_keyboard_update(&event, key);
 		if (state.redraw && al_is_event_queue_empty(queue))
 		{
-            al_set_target_bitmap(buffer);
-            drawbackground();
-            if (state.flag == play) {
-                drawplayer(&player);
-                drawenemies(headenemylist);
-                drawbullets(playerbulletlist);
-                if (!(state.frames % 12)) {
-                    enemycol_check(&enemycol, headenemylist);
-                }
-                al_draw_rectangle(enemycol.x1, enemycol.y1, enemycol.x2, enemycol.y2, al_map_rgb(255, 255, 255), 4);
-                al_draw_textf(smallfont, al_map_rgb(255, 255, 255), DISP_W/30, 0, 0, "punkty: %d", state.score);
-            } else if (state.flag == countdown) {
-                if (state.frames - state.timing > 90) {
-                    state.flag = initiation;
-                }
-                else if (state.frames - state.timing > 60) {
-                    al_draw_text(font, al_map_rgb(255, 255, 255), DISP_W / 2, DISP_H /2, 0, "1");
-                    al_draw_textf(font, al_map_rgb(255, 255, 255), DISP_W *4/10, DISP_H /3, 0, "runda %d", state.round);
-                }
-                else if (state.frames - state.timing > 30) {
-                    al_draw_text(font, al_map_rgb(255, 255, 255), DISP_W / 2, DISP_H /2, 0, "2");
-                    al_draw_textf(font, al_map_rgb(255, 255, 255), DISP_W * 4 / 10, DISP_H / 3, 0, "runda %d", state.round);
-                }
-                else if (state.frames - state.timing > 0) {
-                    al_draw_text(font, al_map_rgb(255, 255, 255), DISP_W /2, DISP_H /2, 0, "3");
-                    al_draw_textf(font, al_map_rgb(255, 255, 255), DISP_W * 4 / 10, DISP_H / 3, 0, "runda %d", state.round);
-                }
-            } else if (state.flag == start) {
-                al_draw_text(font, al_map_rgb(255, 255, 255), DISP_W /8, DISP_H / 3, 0, "nacisnij spacje zeby");
-                al_draw_text(font, al_map_rgb(255, 255, 255), DISP_W / 8, DISP_H / 2, 0, "rozpoczac");
-                if (key[ALLEGRO_KEY_SPACE]) {
-                    state.flag = countdown;
-                    state.timing = state.frames;
-                }         
-            }
-            else if (state.flag == gameover) {
-                al_draw_text(font, al_map_rgb(255, 255, 255), DISP_W / 8, DISP_H / 10, 0, "nacisnij spacje zeby");
-                al_draw_text(font, al_map_rgb(255, 255, 255), DISP_W / 8, DISP_H * 5 / 20, 0, "rozpoczac ponownie");
-                al_draw_textf(font, al_map_rgb(255, 255, 255), DISP_W / 8, DISP_H * 7 / 10, 0, "liczba punktow: %d", state.score);
-                if (state.frames - state.timing > 60) {
-                    if (key[ALLEGRO_KEY_SPACE]) {
-                        enemy_freeptrlist(&headenemylist);
-                        initgamestate(&state);
-                        state.flag = countdown;
-                        state.timing = state.frames;
-                    }
-                }              
-            }
-        }
-        disp_post_draw(&state);
-        state.redraw = false;
+            state_draw(&state, &player, &headenemylist, &enemycol, &playerbulletlist);
+        }       
     }
     destroyall();
 }
 
-void bulletmovement(bullethead* ptr, int bulletspeed) {
-    if (!((*ptr).start == NULL)) {
-        if ((*ptr).start->y < 5) {
-            bullet_deletefirst(ptr);
-        }
-        liststruct* temp = (*ptr).start;
-        while (temp != NULL) {
-            temp->y -= bulletspeed;
-            temp = temp->next;
-        }
+void state_handle_event(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead) {
+    al_wait_for_event(queue, &event);
+    switch (event.type) {
+        case ALLEGRO_EVENT_TIMER:
+            (*state).redraw = true;
+            if ((*state).flag == play) {
+                state_gamelogic(state, player, ehead, enemycol, bhead);
+            }
+            break;
+        case ALLEGRO_EVENT_KEY_DOWN:
+            key[event.keyboard.keycode] = KEY_USED | KEY_RELEASED;
+            break;
+        case ALLEGRO_EVENT_KEY_UP:
+            key[event.keyboard.keycode] &= KEY_RELEASED;
+            break;
+        case ALLEGRO_EVENT_DISPLAY_CLOSE:
+            (*state).quitprog = true;
+            break;
     }
 }
 
-bool checkcollide(int ax1, int ay1, int ax2, int ay2, int bx1, int by1, int bx2, int by2)
-{
-    if (ax1 > bx2) return false;
-    if (ax2 < bx1) return false;
-    if (ay1 > by2) return false;
-    if (ay2 < by1) return false;
-    return true;
-}
-
-void checkptrnull(liststruct* head) {
-    if (head == NULL) {
-        perror("Was assigned null as a pointer");
-        exit(-1);
-    }
+void destroyall() {
+    al_destroy_bitmap(playerimg);
+    al_destroy_bitmap(enemyimg);
+    al_destroy_bitmap(enemybullet);
+    al_destroy_bitmap(playerbullet);
+    al_destroy_font(font);
+    al_destroy_display(display);
+    al_destroy_event_queue(queue);
+    al_destroy_timer(timer);
+    al_destroy_bitmap(buffer);
 }
 
 void collision(bullethead* head, enemyhead* enemyhead, gamestate* state, boundingbox enemycol) {
@@ -293,10 +225,157 @@ void collision(bullethead* head, enemyhead* enemyhead, gamestate* state, boundin
     }
 }
 
-void enemy_deletefirst(enemyhead* ptr) {
-    liststruct* temp = (*ptr).start;
-    (*ptr).start = (*ptr).start->next;
-    free(temp);
+bool checkcollide(int ax1, int ay1, int ax2, int ay2, int bx1, int by1, int bx2, int by2)
+{
+    if (ax1 > bx2) return false;
+    if (ax2 < bx1) return false;
+    if (ay1 > by2) return false;
+    if (ay2 < by1) return false;
+    return true;
+}
+
+void checkptrnull(liststruct* head) {
+    if (head == NULL) {
+        perror("Was assigned null as a pointer");
+        exit(-1);
+    }
+}
+
+void state_exit(enemyhead* ehead, bullethead* bhead) {
+    enemy_freeptrlist(ehead);
+    bullet_freeptrlist(bhead);
+}
+
+void state_draw(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead) {
+    al_set_target_bitmap(buffer);
+    al_clear_to_color(al_map_rgb(0, 0, 0));
+    switch ((*state).flag) {
+    case play:
+        state_draw_play(state, player, ehead, &enemycol, bhead);
+        break;
+    case countdown:
+        state_draw_countdown(state);
+        break;
+    case start:
+        state_draw_start(state);
+        break;
+    case gameover:
+        state_draw_gameover(state, ehead);
+        break;
+    }
+    al_set_target_backbuffer(display);
+    al_draw_scaled_bitmap(buffer, 0, 0, DISP_W, DISP_H, 0, 0, DISP_W, DISP_H, 0);
+    al_flip_display();
+    state->frames++;
+    (*state).redraw = false;
+}
+
+void state_draw_gameover(gamestate* state, enemyhead* head) {
+    al_draw_text(font, al_map_rgb(255, 255, 255), DISP_W / 8, DISP_H / 10, 0, "Nacisnij spacje zeby");
+    al_draw_text(font, al_map_rgb(255, 255, 255), DISP_W / 8, DISP_H * 5 / 20, 0, "rozpoczac ponownie");
+    al_draw_textf(font, al_map_rgb(255, 255, 255), DISP_W / 8, DISP_H * 7 / 10, 0, "Liczba punktow: %d", (*state).score);
+    if ((*state).frames - (*state).timing > 60) {
+        if (key[ALLEGRO_KEY_SPACE]) {
+            enemy_freeptrlist(head);
+            init_state(state);
+            (*state).flag = countdown;
+            (*state).timing = (*state).frames;
+        }
+    }
+}
+
+void state_draw_start(gamestate* state) {
+    al_draw_text(font, al_map_rgb(255, 255, 255), DISP_W / 8, DISP_H / 3, 0, "Nacisnij spacje zeby");
+    al_draw_text(font, al_map_rgb(255, 255, 255), DISP_W / 8, DISP_H / 2, 0, "rozpoczac");
+    if (key[ALLEGRO_KEY_SPACE]) {
+        (*state).flag = countdown;
+        (*state).timing = (*state).frames;
+    }
+}
+
+void state_draw_countdown(gamestate* state) {
+    if ((*state).frames - (*state).timing > 90) {
+        (*state).flag = initiation;
+    }
+    else if ((*state).frames - (*state).timing > 60) {
+        al_draw_text(font, al_map_rgb(255, 255, 255), DISP_W / 2, DISP_H / 2, 0, "1");
+        al_draw_textf(font, al_map_rgb(255, 255, 255), DISP_W * 4 / 10, DISP_H / 3, 0, "Runda %d", (*state).round);
+    }
+    else if ((*state).frames - (*state).timing > 30) {
+        al_draw_text(font, al_map_rgb(255, 255, 255), DISP_W / 2, DISP_H / 2, 0, "2");
+        al_draw_textf(font, al_map_rgb(255, 255, 255), DISP_W * 4 / 10, DISP_H / 3, 0, "Runda %d", (*state).round);
+    }
+    else if ((*state).frames - (*state).timing > 0) {
+        al_draw_text(font, al_map_rgb(255, 255, 255), DISP_W / 2, DISP_H / 2, 0, "3");
+        al_draw_textf(font, al_map_rgb(255, 255, 255), DISP_W * 4 / 10, DISP_H / 3, 0, "Runda %d", (*state).round);
+    }
+}
+
+void state_draw_play(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead) {
+    player_draw(player);
+    enemy_draw(*ehead);
+    bullet_draw(*bhead);
+    if (!((*state).frames % 6)) {
+        enemy_enemycol_check(&enemycol, *ehead);
+    }
+    al_draw_textf(smallfont, al_map_rgb(255, 255, 255), DISP_W / 30, 0, 0, "Punkty: %d", (*state).score);
+    al_draw_textf(smallfont, al_map_rgb(255, 255, 255), DISP_W * 13 / 15, 0, 0, "Runda: %d", (*state).round);
+}
+
+void state_init_initiation(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead) {
+    enemy_freeptrlist(ehead);
+    bullet_freeptrlist(bhead);
+    init_enemy(ehead, enemycol, *state);
+    init_player(player);
+    enemy_enemycol_check(enemycol, *ehead);
+    (*state).flag = play;
+}
+
+void state_init_play(gamestate* state) {
+    (*state).round++;
+    (*state).score += 500;
+    (*state).flag = countdown;
+    (*state).timing = (*state).frames;
+}
+
+void state_gamelogic(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead) {
+    bullet_movement(bhead, (*player).bulletspeed);
+    enemy_movement(enemycol, ehead);
+    player_movement(player, bhead);
+    collision(bhead, ehead, state, *enemycol);
+    (*player).wait--;
+    if ((*enemycol).y2 >= (*player).y) {
+        (*state).flag = gameover;
+        (*state).timing = (*state).frames;
+    }
+}
+
+void state_keyboard_update(ALLEGRO_EVENT* event, unsigned char key[]) {
+    switch (event->type) {
+    case ALLEGRO_EVENT_TIMER:
+        for (int i = 0; i < ALLEGRO_KEY_MAX; i++)
+            key[i] &= KEY_USED;
+        break;
+    case ALLEGRO_EVENT_KEY_DOWN:
+        key[event->keyboard.keycode] = KEY_USED | KEY_RELEASED;
+        break;
+    case ALLEGRO_EVENT_KEY_UP:
+        key[event->keyboard.keycode] &= KEY_RELEASED;
+        break;
+    }
+}
+
+void bullet_movement(bullethead* ptr, int bulletspeed) {
+    if (!((*ptr).start == NULL)) {
+        if ((*ptr).start->y < 5) {
+            bullet_deletefirst(ptr);
+        }
+        liststruct* temp = (*ptr).start;
+        while (temp != NULL) {
+            temp->y -= bulletspeed;
+            temp = temp->next;
+        }
+    }
 }
 
 void bullet_deletefirst(bullethead* ptr) {
@@ -305,31 +384,20 @@ void bullet_deletefirst(bullethead* ptr) {
     free(temp);
 }
 
-void destroyall() {
-    al_destroy_bitmap(playerimg);
-    al_destroy_bitmap(enemyimg);
-    al_destroy_bitmap(enemybullet);
-    al_destroy_bitmap(playerbullet);
-    al_destroy_font(font);
-    al_destroy_display(display);
-    al_destroy_event_queue(queue);
-    al_destroy_timer(timer);
-    al_destroy_bitmap(buffer);
+void bullet_freeptrlist(bullethead* ptr) {
+    struct liststruct* nextp = (*ptr).start;
+    struct liststruct* prev = NULL;
+    while (nextp != NULL)
+    {
+        prev = nextp;
+        nextp = nextp->next;
+        free(prev);
+
+    }
+    (*ptr).start = NULL;
 }
 
-void disp_post_draw(gamestate* state)
-{
-    al_set_target_backbuffer(display);
-    al_draw_scaled_bitmap(buffer, 0, 0, DISP_W, DISP_H, 0, 0, DISP_W, DISP_H, 0);
-    al_flip_display();
-    state->frames++;
-}
-
-void drawbackground() {
-    al_clear_to_color(al_map_rgb(0, 0, 0));
-}
-
-void drawbullets(bullethead ptr) {
+void bullet_draw(bullethead ptr) {
     if (!(ptr.start == NULL)) {
         while (ptr.start != NULL) {
             al_draw_bitmap(playerbullet, ptr.start->x, ptr.start->y, 0);
@@ -338,18 +406,136 @@ void drawbullets(bullethead ptr) {
     }
 }
 
-void drawenemies(enemyhead ptr) {
+void init_test(bool test, const char* description)
+{
+    if (test) return;
+    fprintf(stderr, "couldn't initialize %s\n", description);
+    exit(1);
+}
+
+void init_all()
+{
+    init_test(al_init(), "allegro");
+    init_test(al_install_keyboard(), "keyboard");
+    init_test(al_init_font_addon(), "font addon");
+    init_test(al_init_ttf_addon(), "ttf addon");
+    init_test(al_init_image_addon(), "image addon");
+    init_test(al_init_primitives_addon(), "primitives addon");
+    display = al_create_display(DISP_W, DISP_H);
+    init_test(display, "display");
+    buffer = al_create_bitmap(DISP_W, DISP_H);
+    init_test(buffer, "bitmap buffer");
+    font = al_load_ttf_font("font.ttf", DISP_W / 10, 0);
+    init_test(font, "font.ttf");
+    smallfont = al_load_ttf_font("font.ttf", DISP_W / 30, 0);
+    init_test(smallfont, "font.ttf - small");
+    timer = al_create_timer(1.0 / 30.0);
+    init_test(timer, "timer");
+    queue = al_create_event_queue();
+    init_test(queue, "queue");
+    playerimg = al_load_bitmap("player.png");
+    init_test(playerimg, "playerimg");
+    enemybullet = al_load_bitmap("bullet.png");
+    init_test(enemybullet, "bullet");
+    playerbullet = al_load_bitmap("bullet_me.png");
+    init_test(playerbullet, "bullet_me");
+    enemyimg = al_load_bitmap("enemy.png");
+    init_test(enemyimg, "enemies");
+    al_register_event_source(queue, al_get_keyboard_event_source());
+    al_register_event_source(queue, al_get_display_event_source(display));
+    al_register_event_source(queue, al_get_timer_event_source(timer));
+    al_start_timer(timer);
+}
+
+void init_enemy(enemyhead* ptr, boundingbox* enemycol, gamestate state) {
+    int tempy = DISP_H * 7 / 20;
+    if (state.round == 1) {
+        (*ptr).enemycount = 72;
+        (*ptr).enemyperrow = 12;
+    }
+    (*ptr).enemyspeed = 10 + state.round;
+    (*ptr).start = (liststruct*)malloc(sizeof(liststruct));
+    checkptrnull((*ptr).start);
+    liststruct* temp = (*ptr).start;
+    temp->x = DISP_W / 5;
+    temp->y = tempy;
+    temp->next = NULL;
+    for (int i = 1; i < (*ptr).enemycount; i++) {
+        temp->next = (liststruct*)malloc(sizeof(liststruct));
+        checkptrnull(temp->next);
+        if (i % (*ptr).enemyperrow == 0) {
+            tempy -= DISP_H / 20;
+        }
+        temp->next->x = DISP_W / 5 + i % (*ptr).enemyperrow * DISP_W / 30;
+        temp->next->y = tempy;
+        temp = temp->next;
+    }
+    temp->next = NULL;
+}
+
+void init_state(gamestate* state) {
+    (*state).quitprog = false;
+    (*state).redraw = true;
+    (*state).score = 0;
+    (*state).frames = 0;
+    (*state).round = 1;
+    (*state).flag = start;
+}
+
+void init_player(playerstruct* player) {
+    player->x = DISP_W / 2;
+    player->y = DISP_H * 9 / 10;
+    player->wait = 8;
+    player->bulletspeed = DISP_H / 60;
+    player->movementspeed = 8;
+}
+
+void enemy_deletefirst(enemyhead* ptr) {
+    liststruct* temp = (*ptr).start;
+    (*ptr).start = (*ptr).start->next;
+    free(temp);
+}
+
+void enemy_freeptrlist(enemyhead* ptr) {
+    struct liststruct* nextp = (*ptr).start;
+    struct liststruct* prev = NULL;
+    while (nextp != NULL)
+    {
+        prev = nextp;
+        nextp = nextp->next;
+        free(prev);
+    }
+    (*ptr).start = NULL;
+}
+
+void enemy_draw(enemyhead ptr) {
     while (ptr.start != NULL) {
         al_draw_bitmap(enemyimg, ptr.start->x, ptr.start->y, 0);
         ptr.start = ptr.start->next;
     }
 }
 
-void drawplayer(playerstruct* playerstruct) {
-    al_draw_bitmap(playerimg, playerstruct->x, playerstruct->y, 0);
+void enemy_movement(boundingbox* box, enemyhead* ptr) {
+    liststruct* temp = (*ptr).start;
+    liststruct* copy = (*ptr).start;
+    while (copy != NULL) {
+        copy->x += (*ptr).enemyspeed;
+        copy = copy->next;
+    }
+    box->x1 += (*ptr).enemyspeed;
+    box->x2 += (*ptr).enemyspeed;
+    if (box->x1 < DISP_W / 40 || box->x2 > DISP_W * 39 / 40) {
+        while (temp != NULL) {
+            temp->y += DISP_H / 20;
+            temp = temp->next;
+        }
+        box->y1 += DISP_H / 20;
+        box->y2 += DISP_H / 20;
+        (*ptr).enemyspeed *= -1;
+    }
 }
 
-void enemycol_check(boundingbox* enemycol, enemyhead headenemylist) {
+void enemy_enemycol_check(boundingbox* enemycol, enemyhead headenemylist) {
     struct liststruct* temp = headenemylist.start;
     if (temp == NULL) {
         return;
@@ -376,171 +562,32 @@ void enemycol_check(boundingbox* enemycol, enemyhead headenemylist) {
     enemycol->y2 = maxy + 32;
 }
 
-void enemymovement(boundingbox* box, enemyhead* ptr) {
-    liststruct* temp = (*ptr).start;
-    liststruct* copy = (*ptr).start;
-    while (copy != NULL) {
-        copy->x += (*ptr).enemyspeed;
-        copy = copy->next;
-    }
-    box->x1 += (*ptr).enemyspeed;
-    box->x2 += (*ptr).enemyspeed;
-    if (box->x1 < DISP_W /10 || box->x2 > DISP_W*9/10) { 
-        while (temp != NULL) {
-            temp->y += DISP_H /20;
-            temp = temp->next;
-        }
-        box->y1 += DISP_H /20;
-        box->y2 += DISP_H /20;
-        (*ptr).enemyspeed *= -1;
-    }
+void player_draw(playerstruct* playerstruct) {
+    al_draw_bitmap(playerimg, playerstruct->x, playerstruct->y, 0);
 }
 
-void bullet_freeptrlist(bullethead* ptr) {
-    struct liststruct* nextp = (*ptr).start;
-    struct liststruct* prev = NULL;
-    while (nextp != NULL)
-    {
-        prev = nextp;
-        nextp = nextp->next;
-        free(prev);
-        
-    }
-    (*ptr).start = NULL;
-}
-
-void enemy_freeptrlist(enemyhead* ptr) {
-    struct liststruct* nextp = (*ptr).start;
-    struct liststruct* prev = NULL;
-    while (nextp != NULL)
-    {
-        prev = nextp;
-        nextp = nextp->next;
-        free(prev);
-    }
-    (*ptr).start = NULL;
-}
-
-void init(bool test, const char* description)
-{
-    if (test) return;
-    fprintf(stderr, "couldn't initialize %s\n", description);
-    exit(1);
-}
-
-void init_all()
-{
-    init(al_init(), "allegro");
-    init(al_install_keyboard(), "keyboard");
-    init(al_init_font_addon(), "font addon");
-    init(al_init_ttf_addon(), "ttf addon");
-    init(al_init_image_addon(), "image addon");
-    init(al_init_primitives_addon(), "primitives addon");
-    display = al_create_display(DISP_W, DISP_H);
-    init(display, "display");
-    buffer = al_create_bitmap(DISP_W, DISP_H);
-    init(buffer, "bitmap buffer");
-    font = al_load_ttf_font("font.ttf", DISP_W/10, 0);
-    init(font, "font.ttf");
-    smallfont = al_load_ttf_font("font.ttf", DISP_W /30, 0);
-    init(smallfont, "font.ttf - small");
-    timer = al_create_timer(1.0 / 30.0);
-    init(timer, "timer");
-    queue = al_create_event_queue();
-    init(queue, "queue");
-    playerimg = al_load_bitmap("player.png");
-    init(playerimg, "playerimg");
-    enemybullet = al_load_bitmap("bullet.png");
-    init(enemybullet, "bullet");
-    playerbullet = al_load_bitmap("bullet_me.png");
-    init(playerbullet, "bullet_me");
-    enemyimg = al_load_bitmap("enemy.png");
-    init(enemyimg, "enemies");
-    al_register_event_source(queue, al_get_keyboard_event_source());
-    al_register_event_source(queue, al_get_display_event_source(display));
-    al_register_event_source(queue, al_get_timer_event_source(timer));
-}
-
-void initenemylist(enemyhead* ptr, boundingbox* enemycol, gamestate state) {
-    int tempy = DISP_H/32;
-    if (state.round == 1) {
-        (*ptr).enemycount = 72;
-        (*ptr).enemyperrow = 12;
-    }
-    (*ptr).enemyspeed = 1 + state.round;
-    (*ptr).start = (liststruct*)malloc(sizeof(liststruct));
-    checkptrnull((*ptr).start);
-    liststruct* temp = (*ptr).start;
-    temp->x = DISP_W/5;
-    temp->y = tempy;
-    temp->next = NULL;
-    for (int i = 1; i < (*ptr).enemycount; i++) {
-        temp->next = (liststruct*)malloc(sizeof(liststruct));
-        checkptrnull(temp->next);
-        if (i % (*ptr).enemyperrow == 0) {
-            tempy += DISP_H/20;
-        }
-        temp->next->x = DISP_W/5 + i % (*ptr).enemyperrow * DISP_W/21;
-        temp->next->y = tempy;
-        temp = temp->next;
-    }
-    temp->next = NULL;
-}
-
-void initgamestate(gamestate* state) {
-    (*state).quitprog = false;
-    (*state).redraw = true;
-    (*state).score = 0;
-    (*state).frames = 0;
-    (*state).round = 1;
-    (*state).flag = start;
-}
-
-void initplayer(playerstruct* player) {
-    player->x = DISP_W/2;
-    player->y = DISP_H*17/20;
-    player->wait = 5;
-    player->bulletspeed = DISP_H/60;
-    player->movementspeed = 8;
-}
-
-void keyboard_update(ALLEGRO_EVENT* event, unsigned char key[]){
-    switch (event->type){
-        case ALLEGRO_EVENT_TIMER:
-            for (int i = 0; i < ALLEGRO_KEY_MAX; i++)
-                key[i] &= KEY_USED;
-            break;
-        case ALLEGRO_EVENT_KEY_DOWN:
-            key[event->keyboard.keycode] = KEY_USED | KEY_RELEASED;
-            break;
-        case ALLEGRO_EVENT_KEY_UP:
-            key[event->keyboard.keycode] &= KEY_RELEASED;
-            break;
-    }
-}
-
-void playermovement(playerstruct* player, bullethead* ptr) {
+void player_movement(playerstruct* player, bullethead* ptr) {
     if (key[ALLEGRO_KEY_LEFT]) {
         if (player->x < -15) {
-            player->x = DISP_W+5;
+            player->x = DISP_W + 5;
         }
         player->x += -player->movementspeed;
     }
-    if (key[ALLEGRO_KEY_RIGHT]) {       
+    if (key[ALLEGRO_KEY_RIGHT]) {
         if (player->x > DISP_W + 5) {
             player->x = -5;
         }
         player->x += player->movementspeed;
     }
     if (key[ALLEGRO_KEY_SPACE] && player->wait < 1) {
-        playershoot(ptr, *player);
-        player->wait = 4;
+        player_shoot(ptr, *player);
+        player->wait = 8;
     }
     for (int i = 0; i < ALLEGRO_KEY_MAX; i++)
         key[i] &= KEY_USED;
 }
 
-void playershoot(bullethead* ptr, playerstruct player) {
+void player_shoot(bullethead* ptr, playerstruct player) {
     if (!((*ptr).start == NULL)) {
         liststruct* start = (*ptr).start;
         while (start->next != NULL) {
@@ -560,6 +607,15 @@ void playershoot(bullethead* ptr, playerstruct player) {
         (*ptr).start->next = NULL;
     }
 }
+
+
+
+
+
+
+
+
+
 
 
 
