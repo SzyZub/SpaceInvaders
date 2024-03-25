@@ -68,6 +68,7 @@ void state_init_play(gamestate* state);
 void state_gamelogic(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead, bullethead* ebhead);
 void state_keyboard_update();
 void bullet_movement(bullethead* ptr, int bulletspeed);
+void bullet_enemy_movement(bullethead* ebhead, int bulletspeed);
 void bullet_deletefirst(bullethead* ptr);
 void bullet_freeptrlist(bullethead* ptr);
 void bullet_draw(bullethead bhead, bullethead ebhead);
@@ -362,7 +363,7 @@ void state_init_play(gamestate* state) {
 
 void state_gamelogic(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead, bullethead* ebhead) {
     bullet_movement(bhead, (*player).bulletspeed);
-    bullet_movement(ebhead, (*ehead).bulletspeed);
+    bullet_enemy_movement(ebhead, (*ehead).bulletspeed);
     enemy_movement(enemycol, ehead, ebhead);
     player_movement(player, bhead);
     pbullets_collision(bhead, ehead, state, *enemycol);
@@ -398,6 +399,29 @@ void bullet_movement(bullethead* ptr, int bulletspeed) {
             temp->y -= bulletspeed;
             temp = temp->next;
         }
+    }
+}
+
+void bullet_enemy_movement(bullethead* ebhead, int bulletspeed) {
+    liststruct* temp = (*ebhead).start;
+    liststruct* prev = (*ebhead).start;
+    while (temp != NULL) {
+        temp->y -= bulletspeed;
+        if (temp->y > 965) {
+            if (temp == (*ebhead).start){
+                bullet_deletefirst(ebhead);
+                temp = (*ebhead).start;
+                continue;
+            }
+            else {
+                prev->next = temp->next;
+                free(temp);
+                temp = prev->next;
+                continue;
+            }
+        }
+        prev = temp;
+        temp = temp->next;
     }
 }
 
@@ -662,14 +686,6 @@ void player_shoot(bullethead* ptr, playerstruct player) {
     }
 }
 
-
-/*
-IMPLEMENT IT SO ENEMY BULLETS DISSAPEAR WHEN HITING THE GROUND
-
-
-
-
-*/
 
 
 
