@@ -32,7 +32,7 @@ typedef struct liststruct {
 } liststruct;
 
 typedef struct enemyhead {
-    int enemycount, enemyperrow, enemyspeed, bulletspeed;
+    int enemycount, enemyperrow, enemyspeed, bulletspeed, wait;
     struct liststruct* start;
 } enemyhead;
 
@@ -368,6 +368,7 @@ void state_gamelogic(gamestate* state, playerstruct* player, enemyhead* ehead, b
     player_movement(player, bhead);
     pbullets_collision(bhead, ehead, state, *enemycol);
     (*player).wait--;
+    (*ehead).wait--;
     if ((*enemycol).y2 >= (*player).y || ebullets_collision(ebhead, *player)) {
         (*state).flag = gameover;
         (*state).timing = (*state).frames;
@@ -508,6 +509,7 @@ void init_enemy(enemyhead* ptr, boundingbox* enemycol, gamestate state) {
     }
     (*ptr).enemyspeed = 10 + state.round;
     (*ptr).bulletspeed = -4;
+    (*ptr).wait = 50;
     (*ptr).start = (liststruct*)malloc(sizeof(liststruct));
     checkptrnull((*ptr).start);
     liststruct* temp = (*ptr).start;
@@ -574,8 +576,9 @@ void enemy_movement(boundingbox* box, enemyhead* ptr, bullethead* ebhead) {
     liststruct* copy = (*ptr).start;
     while (copy != NULL) {
         copy->x += (*ptr).enemyspeed;
-        if (!(rand() % 1200)) {
-            enemy_shoot(ebhead, copy->x, copy->y);
+        if (!(rand() % 500) && (*ptr).wait < 0) {
+            enemy_shoot(ebhead, copy->x, copy->y);  
+            (*ptr).wait = 18;
         }  
         copy = copy->next;
     }
@@ -687,7 +690,15 @@ void player_shoot(bullethead* ptr, playerstruct player) {
 }
 
 
-
+/*   TO DO
+implement sprite system
+implement graphics
+implements sounds
+implement walls(collision objects)
+stworzenie systemu menu
+specjalne collectibles otrzymywane przez pokonywanie przeciwnikow
+lista wynikow
+*/
 
 
 
