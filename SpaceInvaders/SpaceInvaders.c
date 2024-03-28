@@ -218,7 +218,7 @@ void pbullets_collision(bullethead* head, enemyhead* enemyhead, gamestate* state
             }
             while (enemy != NULL) {
                 if (checkcollide(tempbullet->x, tempbullet->y, tempbullet->x + 16, tempbullet->y + 32, enemy->x, enemy->y, enemy->x + 32, enemy->y + 32)) {
-                    if (rand() % 100 == 0) {            
+                    /*if (rand() % 100 == 0) {
                         rewardtype = rand() % 3;
                         switch (rewardtype) {                         
                             case 0:
@@ -235,6 +235,7 @@ void pbullets_collision(bullethead* head, enemyhead* enemyhead, gamestate* state
                         }
 
                     }
+                    */
                     if (tempbullet == (*head).start) {
                         bullet_deletefirst(head);
                         tempbullet = (*head).start;
