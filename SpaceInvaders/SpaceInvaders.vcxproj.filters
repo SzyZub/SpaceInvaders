@@ -35,6 +35,9 @@
     <Image Include="bullet_me.png">
       <Filter>Pliki zasobów</Filter>
     </Image>
+    <Image Include="wall.png">
+      <Filter>Pliki zasobów</Filter>
+    </Image>
   </ItemGroup>
   <ItemGroup>
     <Font Include="font.ttf">

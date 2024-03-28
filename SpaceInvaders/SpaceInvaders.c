@@ -55,21 +55,25 @@ typedef struct wall {
     int x, y;
 } wall;
 
+typedef struct reward {
+    int AS, MS, BS;
+} reward;
+
 void destroyall();
-void pbullets_collision(bullethead* head, enemyhead* enemyhead, gamestate* state, boundingbox enemycol);
-bool ebullets_collision(bullethead* ebhead, playerstruct player);
+void pbullets_collision(bullethead* head, enemyhead* enemyhead, gamestate* state, boundingbox enemycol, wall ptr[], int length, reward* collectibles, playerstruct* player);
+bool ebullets_collision(bullethead* ebhead, playerstruct player, wall ptr[], int length);
 bool checkcollide(int ax1, int ay1, int ax2, int ay2, int bx1, int by1, int bx2, int by2);
 void checkptrnull(liststruct* head);
-void state_handle_event(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead, bullethead* ebhead);
-void state_exit(enemyhead* ehead, bullethead* bhead, bullethead* ebhead);
-void state_draw(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead, bullethead* ebhead, wall ptr[]);
-void state_draw_gameover(gamestate* state, enemyhead* head);
+void state_handle_event(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead, bullethead* ebhead, wall* wallptr[], reward* collectibles);
+void state_exit(enemyhead* ehead, bullethead* bhead, bullethead* ebhead, wall* wallptr[]);
+void state_draw(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead, bullethead* ebhead, wall ptr[], reward* collectibles);
+void state_draw_gameover(gamestate* state, enemyhead* head, reward* collectibles);
 void state_draw_start(gamestate* state);
 void state_draw_countdown(gamestate* state);
 void state_draw_play(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead, bullethead* ebhead, wall ptr[]);
-void state_init_initiation(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead, bullethead* ebhead, wall** wallptr);
+void state_init_initiation(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead, bullethead* ebhead, wall** wallptr, reward collectibles);
 void state_init_play(gamestate* state);
-void state_gamelogic(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead, bullethead* ebhead);
+void state_gamelogic(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead, bullethead* ebhead, wall* ptr[], reward* collectibles);
 void state_keyboard_update();
 void bullet_movement(bullethead* ptr, int bulletspeed);
 void bullet_enemy_movement(bullethead* ebhead, int bulletspeed);
@@ -80,21 +84,20 @@ void init_test(bool test, const char* description);;
 void init_all();
 void init_enemy(enemyhead* ptr, boundingbox* enemycol, gamestate state);
 void init_state(gamestate* state);
-void init_player(playerstruct* player);
+void init_player(playerstruct* player, reward rewards);
+void init_rewards(reward* rewards);
 void enemy_deletefirst(enemyhead* ptr);
 void enemy_draw(enemyhead ptr);
 void enemy_movement(boundingbox* box, enemyhead* ptr, bullethead* ebhead);
 void enemy_shoot(bullethead* ebhead, int x, int y);
 void enemy_freeptrlist(enemyhead* ptr);
 void enemy_enemycol_check(boundingbox* enemycol, enemyhead headenemylist);
-void player_movement(playerstruct* player, bullethead* ptr);
+void player_movement(playerstruct* player, bullethead* ptr, reward collectibles);
 void player_draw(playerstruct* playerstruct);
 void player_shoot(bullethead* ptr, playerstruct player);
 void wall_init(wall* ptr[], gamestate state, int length);
 void wall_free(wall* ptr[]);
 void wall_draw(wall ptr[], int length);
-
-
 
 ALLEGRO_DISPLAY* display;
 ALLEGRO_BITMAP* buffer;
@@ -118,6 +121,7 @@ int main() {
     boundingbox enemycol;
     playerstruct player;
     gamestate state;
+    reward collectibles;
     wall* wallptr = NULL;
     headenemylist.start = NULL; 
     playerbulletlist.start = NULL; 
@@ -125,37 +129,37 @@ int main() {
     memset(key, 0, sizeof(key));
     init_all();
     init_state(&state);
+    init_rewards(&collectibles);
     while (true) {
         if (headenemylist.start == NULL) {
             if (state.flag == initiation) {
-                state_init_initiation(&state, &player, &headenemylist, &enemycol, &playerbulletlist, &enemybulletlist, &wallptr);
-                printf("%p", wallptr);
+                state_init_initiation(&state, &player, &headenemylist, &enemycol, &playerbulletlist, &enemybulletlist, &wallptr, collectibles);
             }
             else if (state.flag == play) {
                 state_init_play(&state);
             }
         }
-        state_handle_event(&state, &player, &headenemylist, &enemycol, &playerbulletlist, &enemybulletlist);
+        state_handle_event(&state, &player, &headenemylist, &enemycol, &playerbulletlist, &enemybulletlist, &wallptr, &collectibles);
         if (key[ALLEGRO_KEY_ESCAPE] || state.quitprog) {
-            state_exit(&headenemylist, &playerbulletlist, &enemybulletlist);
+            state_exit(&headenemylist, &playerbulletlist, &enemybulletlist, &wallptr);
             break;
         }
         state_keyboard_update(&event, key);
 		if (state.redraw && al_is_event_queue_empty(queue))
 		{
-            state_draw(&state, &player, &headenemylist, &enemycol, &playerbulletlist, &enemybulletlist, wallptr);
+            state_draw(&state, &player, &headenemylist, &enemycol, &playerbulletlist, &enemybulletlist, wallptr, &collectibles);
         }       
     }
     destroyall();
 }
 
-void state_handle_event(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead, bullethead* ebhead) {
+void state_handle_event(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead, bullethead* ebhead, wall* wallptr[], reward* collectibles) {
     al_wait_for_event(queue, &event);
     switch (event.type) {
         case ALLEGRO_EVENT_TIMER:
             (*state).redraw = true;
             if ((*state).flag == play) {
-                state_gamelogic(state, player, ehead, enemycol, bhead, ebhead);
+                state_gamelogic(state, player, ehead, enemycol, bhead, ebhead, wallptr, collectibles);
             }
             break;
         case ALLEGRO_EVENT_KEY_DOWN:
@@ -182,57 +186,94 @@ void destroyall() {
     al_destroy_bitmap(buffer);
 }
 
-void pbullets_collision(bullethead* head, enemyhead* enemyhead, gamestate* state, boundingbox enemycol) {
+void pbullets_collision(bullethead* head, enemyhead* enemyhead, gamestate* state, boundingbox enemycol, wall ptr[], int length, reward* collectibles, playerstruct* player) {
     liststruct* enemy = (*enemyhead).start, * tempenemy = NULL, * prevenemy = NULL;
     liststruct* tempbullet = (*head).start, * prev = NULL;
     int flag = 0;
-    while (tempbullet != NULL) {
+    int rewardtype;
+    while (tempbullet != NULL && (*head).start != NULL) {
         tempenemy = (*enemyhead).start;
-        if (!(checkcollide(tempbullet->x, tempbullet->y, tempbullet->x + 16, tempbullet->y + 32, enemycol.x1, enemycol.y1, enemycol.x2, enemycol.y2))) {
-            prev = tempbullet;
-            tempbullet = tempbullet->next;
-            continue;
-        }
-        while (enemy != NULL) {
-            if (checkcollide(tempbullet->x, tempbullet->y, tempbullet->x + 16, tempbullet->y + 32, enemy->x, enemy->y, enemy->x + 32, enemy->y + 32)) {
-                if (tempbullet == (*head).start) {
-                    bullet_deletefirst(head);
-                    tempbullet = (*head).start;
-                    flag = 1;
-                    if (enemy == (*enemyhead).start) {
-                        enemy_deletefirst(enemyhead);
-                        enemy = (*enemyhead).start;
-                        (*state).score += 15;
-                    }
-                    else {
-                        prevenemy->next = enemy->next;
-                        free(enemy);
-                        enemy = prevenemy->next;
-                        (*state).score += 15;
-                    }
-                    break;
+        for (int i = 0; i < length; i++) {
+            if (checkcollide(tempbullet->x, tempbullet->y, tempbullet->x + 16, tempbullet->y + 32, ptr[i].x, ptr[i].y, ptr[i].x + 32, ptr[i].y)) {
+               if (tempbullet == (*head).start) {
+                   bullet_deletefirst(head);
+                   tempbullet = (*head).start;
+                   flag = 1;
+                   break;
                 }
                 else {
                     prev->next = tempbullet->next;
                     free(tempbullet);
                     tempbullet = prev->next;
                     flag = 1;
-                    if (enemy == (*enemyhead).start) {
-                        enemy_deletefirst(enemyhead);
-                        enemy = (*enemyhead).start;
-                        (*state).score += 15;
-                    }
-                    else {
-                        prevenemy->next = enemy->next;
-                        free(enemy);
-                        enemy = prevenemy->next;
-                        (*state).score += 15;
-                    }
                     break;
                 }
             }
-            prevenemy = enemy;
-            enemy = enemy->next;
+        }
+        if (flag != 1) {
+            if (!(checkcollide(tempbullet->x, tempbullet->y, tempbullet->x + 16, tempbullet->y + 32, enemycol.x1, enemycol.y1, enemycol.x2, enemycol.y2))) {
+                prev = tempbullet;
+                tempbullet = tempbullet->next;
+                continue;
+            }
+            while (enemy != NULL) {
+                if (checkcollide(tempbullet->x, tempbullet->y, tempbullet->x + 16, tempbullet->y + 32, enemy->x, enemy->y, enemy->x + 32, enemy->y + 32)) {
+                    if (rand() % 100 == 0) {            
+                        rewardtype = rand() % 3;
+                        switch (rewardtype) {                         
+                            case 0:
+                                (*collectibles).AS++;
+                                break;
+                            case 1:
+                                (*collectibles).MS++;
+                                (*player).movementspeed++;
+                                break;
+                            case 2:
+                                (*collectibles).BS++;
+                                (*player).bulletspeed += DISP_H/240;
+                                break;
+                        }
+
+                    }
+                    if (tempbullet == (*head).start) {
+                        bullet_deletefirst(head);
+                        tempbullet = (*head).start;
+                        flag = 1;
+                        if (enemy == (*enemyhead).start) {
+                            enemy_deletefirst(enemyhead);
+                            enemy = (*enemyhead).start;
+                            (*state).score += 15;
+                        }
+                        else {
+                            prevenemy->next = enemy->next;
+                            free(enemy);
+                            enemy = prevenemy->next;
+                            (*state).score += 15;
+                        }
+                        break;
+                    }
+                    else {
+                        prev->next = tempbullet->next;
+                        free(tempbullet);
+                        tempbullet = prev->next;
+                        flag = 1;
+                        if (enemy == (*enemyhead).start) {
+                            enemy_deletefirst(enemyhead);
+                            enemy = (*enemyhead).start;
+                            (*state).score += 15;
+                        }
+                        else {
+                            prevenemy->next = enemy->next;
+                            free(enemy);
+                            enemy = prevenemy->next;
+                            (*state).score += 15;
+                        }
+                        break;
+                    }
+                }
+                prevenemy = enemy;
+                enemy = enemy->next;
+            }
         }
         if (flag == 1) {
             flag = 0;
@@ -244,13 +285,37 @@ void pbullets_collision(bullethead* head, enemyhead* enemyhead, gamestate* state
     }
 }
 
-bool ebullets_collision(bullethead* ebhead, playerstruct player) {
+bool ebullets_collision(bullethead* ebhead, playerstruct player, wall ptr[], int length) {
     liststruct* head = (*ebhead).start;
+    liststruct* temp = NULL;
+    int flag = 0;
     if ((*ebhead).start != NULL) {
         while (head != NULL) {
             if (checkcollide(player.x +5, player.y + 10, player.x + 59, player.y + 64, head->x + 1, head->y + 2, head->x + 15, head->y + 30)) {
                 return true;
             }
+            for (int i = 0; i < length; i++) {
+                if (checkcollide(head->x + 1, head->y + 2, head->x + 15, head->y + 30, ptr[i].x, ptr[i].y, ptr[i].x + 32, ptr[i].y)) {
+                    if (head == (*ebhead).start) {
+                        bullet_deletefirst(ebhead);
+                        head = (*ebhead).start;
+                        flag = 1;
+                        break;
+                    }
+                    else {
+                        temp->next = head->next;
+                        free(head);
+                        head = temp->next;
+                        flag = 1;
+                        break;
+                    }
+                }
+            }
+            if (flag == 1) {
+                flag = 0;
+                continue;
+            }
+            temp = head;
             head = head->next;
         }
     }
@@ -273,13 +338,14 @@ void checkptrnull(liststruct* head) {
     }
 }
 
-void state_exit(enemyhead* ehead, bullethead* bhead, bullethead* ebhead) {
+void state_exit(enemyhead* ehead, bullethead* bhead, bullethead* ebhead, wall* wallptr[]) {
     enemy_freeptrlist(ehead);
     bullet_freeptrlist(bhead);
     bullet_freeptrlist(ebhead);
+    wall_free(wallptr);
 }
 
-void state_draw(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead, bullethead* ebhead, wall ptr[]) {
+void state_draw(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead, bullethead* ebhead, wall ptr[], reward* collectibles) {
     al_set_target_bitmap(buffer);
     al_clear_to_color(al_map_rgb(0, 0, 0));
     switch ((*state).flag) {
@@ -293,7 +359,7 @@ void state_draw(gamestate* state, playerstruct* player, enemyhead* ehead, boundi
         state_draw_start(state);
         break;
     case gameover:
-        state_draw_gameover(state, ehead);
+        state_draw_gameover(state, ehead, collectibles);
         break;
     }
     al_set_target_backbuffer(display);
@@ -303,7 +369,7 @@ void state_draw(gamestate* state, playerstruct* player, enemyhead* ehead, boundi
     (*state).redraw = false;
 }
 
-void state_draw_gameover(gamestate* state, enemyhead* head) {
+void state_draw_gameover(gamestate* state, enemyhead* head, reward* collectibles) {
     al_draw_text(font, al_map_rgb(255, 255, 255), DISP_W / 8, DISP_H / 10, 0, "Nacisnij spacje zeby");
     al_draw_text(font, al_map_rgb(255, 255, 255), DISP_W / 8, DISP_H * 5 / 20, 0, "rozpoczac ponownie");
     al_draw_textf(font, al_map_rgb(255, 255, 255), DISP_W / 8, DISP_H * 7 / 10, 0, "Liczba punktow: %d", (*state).score);
@@ -311,6 +377,7 @@ void state_draw_gameover(gamestate* state, enemyhead* head) {
         if (key[ALLEGRO_KEY_SPACE]) {
             enemy_freeptrlist(head);
             init_state(state);
+            init_rewards(collectibles);
             (*state).flag = countdown;
             (*state).timing = (*state).frames;
         }
@@ -357,13 +424,13 @@ void state_draw_play(gamestate* state, playerstruct* player, enemyhead* ehead, b
     al_draw_textf(smallfont, al_map_rgb(255, 255, 255), DISP_W * 13 / 15, 0, 0, "Runda: %d", (*state).round);
 }
 
-void state_init_initiation(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead, bullethead* ebhead, wall **wallptr) {
+void state_init_initiation(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead, bullethead* ebhead, wall **wallptr, reward collectibles) {
     wall_free(wallptr);
     enemy_freeptrlist(ehead);
     bullet_freeptrlist(bhead);
     bullet_freeptrlist(ebhead);
     init_enemy(ehead, enemycol, *state);
-    init_player(player);
+    init_player(player, collectibles);
     wall_init(wallptr, *state, (*state).round + 2);
     enemy_enemycol_check(enemycol, *ehead);
     (*state).flag = play;
@@ -376,15 +443,15 @@ void state_init_play(gamestate* state) {
     (*state).timing = (*state).frames;
 }
 
-void state_gamelogic(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead, bullethead* ebhead) {
+void state_gamelogic(gamestate* state, playerstruct* player, enemyhead* ehead, boundingbox* enemycol, bullethead* bhead, bullethead* ebhead, wall* ptr[], reward* collectibles) {
     bullet_movement(bhead, (*player).bulletspeed);
     bullet_enemy_movement(ebhead, (*ehead).bulletspeed);
     enemy_movement(enemycol, ehead, ebhead);
-    player_movement(player, bhead);
-    pbullets_collision(bhead, ehead, state, *enemycol);
+    player_movement(player, bhead, *collectibles);
+    pbullets_collision(bhead, ehead, state, *enemycol, *ptr, (*state).round + 2, collectibles, player);
     (*player).wait--;
     (*ehead).wait--;
-    if ((*enemycol).y2 >= (*player).y || ebullets_collision(ebhead, *player)) {
+    if ((*enemycol).y2 >= (*player).y || ebullets_collision(ebhead, *player, *ptr, (*state).round + 2)) {
         (*state).flag = gameover;
         (*state).timing = (*state).frames;
     }
@@ -555,12 +622,18 @@ void init_state(gamestate* state) {
     (*state).flag = start;
 }
 
-void init_player(playerstruct* player) {
+void init_player(playerstruct* player, reward rewards) {
     player->x = DISP_W / 2;
     player->y = DISP_H * 9 / 10;
     player->wait = 8;
-    player->bulletspeed = DISP_H / 60;
-    player->movementspeed = 8;
+    player->bulletspeed = DISP_H / 60 + rewards.BS * DISP_H/240 ;
+    player->movementspeed = 8 + rewards.MS;
+}
+
+void init_rewards(reward* rewards) {
+    rewards->AS = 0;
+    rewards->MS = 0;
+    rewards->BS = 0;
 }
 
 void enemy_deletefirst(enemyhead* ptr) {
@@ -664,7 +737,7 @@ void player_draw(playerstruct* playerstruct) {
     al_draw_bitmap(playerimg, playerstruct->x, playerstruct->y, 0);
 }
 
-void player_movement(playerstruct* player, bullethead* ptr) {
+void player_movement(playerstruct* player, bullethead* ptr, reward collectibles) {
     if (key[ALLEGRO_KEY_LEFT]) {
         if (player->x < -15) {
             player->x = DISP_W + 5;
@@ -679,7 +752,7 @@ void player_movement(playerstruct* player, bullethead* ptr) {
     }
     if (key[ALLEGRO_KEY_SPACE] && player->wait < 1) {
         player_shoot(ptr, *player);
-        player->wait = 8;
+        player->wait = 8 - collectibles.AS;
     }
     for (int i = 0; i < ALLEGRO_KEY_MAX; i++)
         key[i] &= KEY_USED;
@@ -709,8 +782,8 @@ void player_shoot(bullethead* ptr, playerstruct player) {
 void wall_init(wall* ptr[], gamestate state, int length) {
     *ptr = calloc(length, sizeof(wall));
     for (int i = 0; i < length; i++) {
-        (*ptr)[i].x = 15 + rand() %(1260/length)  + i * (1200/length);
-        (*ptr)[i].y = 500 + rand() % 200;
+        (*ptr)[i].x = rand()%(1280/length)  + i * (1188/length);
+        (*ptr)[i].y = DISP_H*7/20 + 32 + rand()%9 * DISP_H/20;
     }
 }
 
@@ -727,13 +800,13 @@ void wall_draw(wall ptr[], int length) {
     }
 }
 
+
 /*   TO DO
 implement sprite system
 implement graphics
 implements sounds
-implement walls(collision objects)
 stworzenie systemu menu
-specjalne collectibles otrzymywane przez pokonywanie przeciwnikow
+specjalne collectibles otrzymywane przez pokonywanie przeciwnikow - rebalans i implementacji modeli i spadania
 lista wynikow
 */
 

@@ -152,6 +152,7 @@
     <Image Include="..\..\Users\Start\Desktop\enemy.png" />
     <Image Include="bullet_me.png" />
     <Image Include="player.png" />
+    <Image Include="wall.png" />
   </ItemGroup>
   <ItemGroup>
     <Font Include="font.ttf" />
